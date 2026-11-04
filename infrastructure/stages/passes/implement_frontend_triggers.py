@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from infrastructure.stages.frontend.triggers.context import load_e2e_context
+from infrastructure.stages.frontend.triggers.e2e_runtime import stop_e2e_servers
 from infrastructure.stages.frontend.triggers.implementation import run_trigger_tdd, verify_frontend
 from infrastructure.stages.frontend.triggers.acceptance import acceptance_path, run_independent_acceptance
 from infrastructure.stages.frontend.triggers.testing import test_path
@@ -13,7 +14,7 @@ from infrastructure.utils.files import save_json
 
 
 def implement_frontend_triggers(input_dir: Path, arc_dir: Path, pause: bool = False,
-        max_turns: int = 10, max_tests: int = 2) -> dict:
+        max_turns: int = 20, max_tests: int = 2) -> dict:
     if min(max_turns, max_tests) < 1:
         raise ValueError("--max-turns and --max-tests must be positive")
     tree, schema, backend, ui, interactions, images, contexts = load_e2e_context(arc_dir, input_dir)
@@ -57,3 +58,6 @@ def implement_frontend_triggers(input_dir: Path, arc_dir: Path, pause: bool = Fa
                 requirement["status"] = "FAILED"
         save_json(arc_dir / "frontend_e2e.json", report)
         raise
+    finally:
+        # One reused server pair per stage; release it so nothing is left running.
+        stop_e2e_servers(arc_dir.parent)

@@ -49,7 +49,7 @@ SQL files in a transaction. Preserve existing data through IF NOT EXISTS.
 """
 
 
-def implement_db(arc_dir: Path, pause: bool = False, max_attempts: int = 10, max_turns: int = 10) -> dict:
+def implement_db(arc_dir: Path, pause: bool = False, max_attempts: int = 10, max_turns: int = 20) -> dict:
     if max_turns < 1:
         raise ValueError("--max-turns must be positive")
     source = arc_dir / "db_schema.json"

@@ -205,7 +205,7 @@ If a necessary correction is outside tool scope, explain the exact blocker in di
 
 
 def run_trigger_tdd(arc_dir, tree, schema, backend, ui, design, images, contexts,
-        model, console, report, max_turns=10, max_tests=2):
+        model, console, report, max_turns=20, max_tests=2):
     """Implement design one requirement at a time through real-app E2E TDD.
 
     Prepare dependencies/runtime, generate initial key scenario tests, then

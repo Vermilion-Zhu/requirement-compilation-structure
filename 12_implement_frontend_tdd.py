@@ -9,7 +9,7 @@ from infrastructure.utils.presentation.logging import console_log
 
 def main() -> None:
     parser = create_parser("Step 12: Frontend/Backend Integration with Playwright Functional Smoke Tests")
-    parser.add_argument("--max-turns", type=int, default=10, help="Maximum edit rounds per requirement's test/implementation agent")
+    parser.add_argument("--max-turns", type=int, default=20, help="Maximum edit rounds per requirement's test/implementation agent")
     parser.add_argument("--max-tests", type=int, default=2, help="Maximum functional smoke cases per requirement (default: 2)")
     args = parser.parse_args()
     with ExitStack() as stack:

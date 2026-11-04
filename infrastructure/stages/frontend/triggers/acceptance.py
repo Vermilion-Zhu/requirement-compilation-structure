@@ -23,12 +23,19 @@ from infrastructure.stages.frontend.ui.testing import FrontendChecks, require_gr
 from infrastructure.utils.files import save_json
 from infrastructure.shared.project.git import checkpoint
 
+ACCEPTANCE_READABLE = ('package.json', 'backend/package.json', 'frontend/package.json',
+    'backend/src/db/initialize.ts', 'backend/src/db/client.ts',
+    'frontend/playwright.e2e.config.ts', 'frontend/vite.e2e.config.ts')
+
+
 INSTRUCTIONS = '''Write independent final acceptance tests for ONE original requirement.
 Derive expected results from original_requirement and its Given/When/Then scenarios.
 Interface details are supplied only to locate UI elements/routes and prepare valid Given
 fixtures; they are not authority to weaken an original business requirement. Neither
-application source nor implementation-owned tests are supplied. Do not infer expected
-behavior from an observed implementation result or duplicate process smoke tests.
+application source nor implementation-owned tests are readable: do not request page,
+handler or table files. Only the task fields, the fixture, package metadata and the
+compiler-owned DB/test helpers can be read. Do not infer expected behavior from an
+observed implementation result or duplicate process smoke tests.
 
 Write a small Playwright suite at test_path using the supplied test/expect/database
 fixture. Drive When actions through the real browser without mocks or injected state.
@@ -85,7 +92,7 @@ def original_requirements(input_dir):
 
 
 def run_independent_acceptance(input_dir, arc_dir, schema, backend, ui, design, model, console,
-        max_turns=10, *, process_report):
+        max_turns=20, *, process_report):
     output = arc_dir.parent.resolve()
     tree = original_requirements(input_dir)
     checks = E2EChecks(output)
@@ -126,7 +133,8 @@ def run_independent_acceptance(input_dir, arc_dir, schema, backend, ui, design, 
             task['shared_conventions'] = task_conventions(output, {'requirement': task['original_requirement']})
             workspace = FileTools.for_target(output, 'acceptance_test', rid, fixed_path=path,
                 references=[FIXTURE, 'backend/tests/support/context.ts'],
-                readable=[path, FIXTURE, 'backend/tests/support/context.ts'])
+                readable=[path, FIXTURE, 'backend/tests/support/context.ts',
+                    *ACCEPTANCE_READABLE])
 
             def compile_suite():
                 if not (output / path).is_file():

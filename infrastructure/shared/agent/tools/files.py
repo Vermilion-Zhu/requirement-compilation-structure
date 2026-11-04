@@ -33,7 +33,12 @@ def read_file(files, path, start_line=1, end_line=None):
     """Read the requested lines only; reading never expands the pinned source context."""
     target = files.path(path)
     if files.readable is not None and path not in files.readable:
-        raise FileToolError("READ_NOT_ALLOWED", "This task cannot read this file", path)
+        allowed = sorted(files.readable)
+        listed = ", ".join(allowed[:12]) + (", ..." if len(allowed) > 12 else "")
+        raise FileToolError("READ_NOT_ALLOWED",
+            f"This task cannot read this file. It may read only: {listed or '(nothing)'}. "
+            "Use the supplied task evidence (task fields, schema, interfaces, fixtures) instead of "
+            "application source, and stop requesting unlisted files.", path)
     if not target.is_file():
         raise FileToolError("FILE_NOT_FOUND", "File does not exist; use edit_file/create for a new file", path)
     if type(start_line) is not int or start_line < 1 or (end_line is not None and

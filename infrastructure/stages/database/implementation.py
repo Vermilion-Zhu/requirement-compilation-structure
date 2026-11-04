@@ -85,7 +85,7 @@ Real initialization/build checks run after this pass and the database owner repa
 '''
 
 
-def implement_startup_data(arc_dir, schema, model, console, failures, max_turns=10):
+def implement_startup_data(arc_dir, schema, model, console, failures, max_turns=20):
     """Create per-table files, then accumulate prerequisite rows one requirement at a time."""
     output = arc_dir.parent.resolve()
     order = [name for group in implementation_groups(schema) for name in group]
@@ -163,7 +163,7 @@ starts/restarts the compiled backend and initializes backend/data/app.db after e
 '''
 
 
-def verify_database_runtime(arc_dir, schema, model, console, max_turns=10):
+def verify_database_runtime(arc_dir, schema, model, console, max_turns=20):
     output = arc_dir.parent.resolve()
     report = {"status": "CHECKING", "expected_tables": list(schema["entities"]), "repair_turns": 0}
     path = arc_dir / "db_checks.json"

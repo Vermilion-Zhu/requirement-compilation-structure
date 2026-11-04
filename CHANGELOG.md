@@ -53,7 +53,16 @@
 | **契约可视化** | `interfaces` / `tests` 两张表一直是空的，网站只能看到需求级状态 | 06 写入 API 契约（含需求归属），09 写入页面契约，11 写入 trigger 契约并回填 API 的 `callers`；08 / 10 / 12 写入后端、UI、E2E、独立验收四类测试行（含文件路径与通过状态），API 实现完成后回填 `implemented` 与实现文件 |
 | **测试基线** | 仓库原有 47 条用例针对已被替换的契约（整文件替换、编译器托管 wiring、扁平 tool call），长期红着，掩盖真实回归 | 修好可由当前 API 表达的（导入、签名、tool 形状、`schemas()` 结构、httpx 超时断言）；其余以 `ARC_LEGACY_TESTS=1` 门控跳过并注明原因 |
 
-测试现状：`211 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+### 2.3 第三轮：冒烟日志驱动的四项修正
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **读取权限** | 日志里有 10 次 `This task cannot read this file`，全部发生在第 12 阶段的独立验收生成/复核，白耗了修复轮次 | 验收任务的只读白名单补上编译器自有基础设施与元数据（三个 `package.json`、`db/initialize.ts`、`db/client.ts`、`playwright.e2e.config.ts`、`vite.e2e.config.ts`）；错误信息改为列出"本次可读文件"并明确"应用源码不可读，请改用任务证据"；验收提示词同步说明，避免反复重试 |
+| **轮次预算** | 冒烟中 REQ-2 的独立验收用到 9/10 轮，接近耗尽 | 所有 agent 循环的 `max_turns` 默认值 10 → **20**（05 数据库修复、08 后端 TDD、10 UI TDD、12 触发器/验收），CLI 默认值同步；按"优先保证正确率"的要求，接受最坏情况下更长 |
+| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端，第 12 阶段 377 s 花在这里 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定（这样复用的 Vite 代理仍指向正确后端）、后端源代码指纹变化时才重启后端、数据库文件复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；任何启动失败自动回退到"每次新起服务器"的旧行为，阶段结束时 `stop_e2e_servers` 回收进程与临时库 |
+| **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
+
+测试现状：`218 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -111,7 +120,7 @@ uv run python scripts\package.py -o compiler.zip
 
 - 打包脚本产出结构正确的 ZIP（`main.py`、`requirements.txt`、`infrastructure/stages/passes/`、
   `arcbench-agent-runtime/`、模板与 `deploy.sh` 齐全；无 `.env`/`.venv`/`output/`）。
-- 全部单元测试：`211 tests, OK (skipped=48)`，与改动前基线逐条对比 **0 回归**。
+- 全部单元测试：`218 tests, OK (skipped=48)`，与改动前基线逐条对比 **0 回归**。
 - 模拟平台调用：用官方模板冒充注入基线执行 00 阶段，基线被完整移入备份目录，
   生成的 `backend/package.json` 为 `@arc/backend`，`deploy.sh` 通过 `bash -n`。
 - 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`interfaces` / `tests` 表记录
@@ -127,8 +136,9 @@ uv run python scripts\package.py -o compiler.zip
 
 - 46 条 legacy 用例尚未移植到当前契约（默认跳过，`ARC_LEGACY_TESTS=1` 可运行）。
 - 契约与测试明细只覆盖到"一次运行"：重跑同一任务会覆盖行而不保留历史（历史由 Git 提交承担）。
-- 依赖安装仍在 05/08/10/12 触发多次、Chromium 最多装 2 次：按当前选择**保持现状**，
-  等后续练习出现真实超时再按需调整。
+- 依赖安装仍在 05/08/10/12 触发多次、Chromium 最多装 2 次：冒烟日志显示它们是增量（8 秒），
+  保持现状；真正的大头（E2E 重复起服务）已改为复用。
+- 复用服务器依赖"后端源码指纹 + 健康检查"判断；若平台容器禁止长驻进程，运行时会自动回退到旧行为。
 - 只支持 web 任务；`cli` / `android` 会明确失败而不是给出错误结果。
 
 ---
@@ -139,5 +149,5 @@ uv run python scripts\package.py -o compiler.zip
    给声明式 R/W 补上"实际访问"的静态检查、实现 Reference 的 data/state 两种语义、
    用有界定点迭代替代"失败就往下走"。
 2. **移植 legacy 用例**：按整文件替换、model-owned wiring、扁平 tool call 三条契约逐组重写。
-3. **按新日志继续调优**（需要更多样本）：独立验收的 `max_turns` 余量偏小
-   （本轮 REQ-2 用到 9/10），E2E 复用 server 可显著压缩第 12 阶段时间——两者都等更多练习数据再定。
+3. **用下一次冒烟日志验证本轮四项修正**：`max_turns=20` 是否消除耗尽、E2E 复用是否把第 12 阶段压下来、
+   读取拒绝是否归零——直接跑 `python scripts/analyze_log.py <log>` 即可对比。

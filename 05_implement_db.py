@@ -10,7 +10,7 @@ from infrastructure.utils.presentation.logging import console_log
 def main() -> None:
     parser = create_parser("Step 05: Implement DB Tables and Required Startup Data")
     parser.add_argument("--max-attempts", type=int, default=10, help="Maximum proposals per table or startup-data requirement (default: 10)")
-    parser.add_argument("--max-turns", type=int, default=10, help="Maximum real database/startup repair rounds")
+    parser.add_argument("--max-turns", type=int, default=20, help="Maximum real database/startup repair rounds")
     args = parser.parse_args()
     with ExitStack() as stack:
         try:

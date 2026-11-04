@@ -9,7 +9,7 @@ from infrastructure.utils.presentation.logging import console_log
 
 def main() -> None:
     parser = create_parser("Step 10: Playwright UI Existence Tests and UI Implementation TDD")
-    parser.add_argument("--max-turns", type=int, default=10, help="Maximum edit/check turns per page implementation")
+    parser.add_argument("--max-turns", type=int, default=20, help="Maximum edit/check turns per page implementation")
     args = parser.parse_args()
     with ExitStack() as stack:
         try:

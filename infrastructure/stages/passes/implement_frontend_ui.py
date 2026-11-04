@@ -14,7 +14,7 @@ from infrastructure.utils.files import save_json
 
 
 def implement_frontend_ui(input_dir: Path, arc_dir: Path, pause: bool = False,
-        max_turns: int = 10) -> dict:
+        max_turns: int = 20) -> dict:
     if max_turns < 1:
         raise ValueError("--max-turns must be positive")
     if not (arc_dir / "ui_design.json").is_file():

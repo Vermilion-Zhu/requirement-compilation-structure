@@ -9,7 +9,7 @@ from infrastructure.utils.presentation.logging import console_log
 
 def main() -> None:
     parser = create_parser("Step 08: TDD-driven API Implementation (P / Q / Dataflow Obligations)")
-    parser.add_argument("--max-turns", type=int, default=10, help="Maximum edit rounds per test/implementation agent")
+    parser.add_argument("--max-turns", type=int, default=20, help="Maximum edit rounds per test/implementation agent")
     parser.add_argument("--max-tests", type=int, default=5, help="Maximum key contract tests per API (default: 5)")
     args = parser.parse_args()
     with ExitStack() as stack:
