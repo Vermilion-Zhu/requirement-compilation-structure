@@ -16,5 +16,5 @@ def design_frontend_ui(input_dir: Path, arc_dir: Path, pause: bool = False, top_
     console, model = DemoConsole(pause), TextModel(json_mode=False)
     design = synthesize_ui(arc_dir, tree, images, contexts,
         model, console, top_k, max_attempts)
-    print(f"UI/data design saved: {arc_dir / 'ui_design.json'}\nRun 10_implement_ui.py to generate existence tests and implement the pages.", flush=True)
+    print(f"UI/data design saved: {arc_dir / 'ui_design.json'}\nRun the UI-implementation pass (10) to generate existence tests and implement the pages.", flush=True)
     return design

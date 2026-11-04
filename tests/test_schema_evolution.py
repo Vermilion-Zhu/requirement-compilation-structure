@@ -92,7 +92,7 @@ class SchemaEvolution(unittest.TestCase):
             model = Mock()
             with patch.object(stage3, 'TextModel', return_value=model), patch.object(stage3, 'DemoConsole', return_value=Mock()), self.assertRaises(RuntimeError) as failure:
                 stage3.infer_db_obligations(arc)
-            self.assertIn('Rerun 02_build_db_schema.py', failure.exception.failures[0]['error'])
+            self.assertIn('Rerun the database-schema pass (02)', failure.exception.failures[0]['error'])
             self.assertEqual(failure.exception.failures[0]['task'], 'REQ-1')
             model.generate_json.assert_not_called()
 

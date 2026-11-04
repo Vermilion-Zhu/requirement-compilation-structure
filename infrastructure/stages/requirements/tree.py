@@ -1,4 +1,12 @@
-"""Index requirement containment while retaining each scenario's step context."""
+"""Index requirement containment while retaining each scenario's step context.
+
+ARC-Bench tasks are not guaranteed to reuse the teaching example's exact shape:
+scenarios and steps may omit identifiers, ``description`` may be a string, a
+mapping or a list, and ``children`` may be absent or null. The index therefore
+normalizes what it can and only rejects a tree that cannot be traversed at all;
+later passes depend on stable IDs, so missing ones are generated deterministically
+and reported instead of aborting the compilation.
+"""
 
 import json
 
@@ -12,47 +20,83 @@ class RequirementTree:
         """Index requirements and scenario steps while validating IDs and ownership.
 
         Build children, own_steps, leaf order, and child-before-parent postorder
-        once so later stages share the same containment semantics."""
+        once so later stages share the same containment semantics.
+        """
+        if not isinstance(root, dict):
+            raise ValueError("The requirement tree root must be an object")
         self.requirements = {}
         self.steps = {}
         self.children = {}
         self.own_steps = {}
         self.postorder = []
-
-        def identifier(node, kind):
-            """Read a requirement, scenario or step ID from the JSON document."""
-            return node["id"]
+        self.generated_ids = []
 
         def items(node, key):
-            """Read an optional list field and reject malformed child, scenario, step, or reference collections."""
+            """Read an optional list field, tolerating a missing or null value."""
             value = node.get(key, [])
-            return value
+            return value if isinstance(value, list) else []
+
+        def text(value):
+            """Normalize a requirement text field that may be a string, list or mapping."""
+            if isinstance(value, str):
+                return value
+            if isinstance(value, dict):
+                return text(value.get("text", ""))
+            if isinstance(value, list):
+                return "\n".join(part for part in (text(item) for item in value) if part)
+            return "" if value is None else str(value)
+
+        def generated(value, fallback):
+            """Keep a supplied identifier or derive a stable one and record it."""
+            name = str(value or "").strip()
+            if name:
+                return name
+            self.generated_ids.append(fallback)
+            return fallback
+
+        def unique(name, used):
+            """Disambiguate a duplicated supplied identifier without dropping a node."""
+            if name not in used:
+                return name
+            index = 2
+            while f"{name}-{index}" in used:
+                index += 1
+            self.generated_ids.append(f"{name}-{index}")
+            return f"{name}-{index}"
 
         def visit(node):
-            """Index one requirement and its own steps, recurse into children, then append its postorder ID."""
-            rid = identifier(node, "requirement")
-            description = node.get("description", "")
-            if isinstance(description, dict):
-                description = description.get("text", "")
-            self.requirements[rid] = {"id": rid, "name": node.get("name", ""), "description": description}
+            """Index one requirement and its own steps, recurse into children, then append postorder."""
+            if not isinstance(node, dict):
+                return None
+            rid = unique(generated(node.get("id"), f"REQ-{len(self.requirements) + 1}"), self.requirements)
+            self.requirements[rid] = {"id": rid, "name": text(node.get("name")), "description": text(node.get("description"))}
             self.own_steps[rid] = []
-            for scenario in items(node, "scenarios"):
-                sid = identifier(scenario, "scenario")
-                for step in items(scenario, "steps"):
-                    step_id = identifier(step, "step")
-                    record = {"id": step_id, "scenario": {"id": sid, "name": scenario.get("name", "")}}
+            for scenario_index, scenario in enumerate(items(node, "scenarios"), 1):
+                if not isinstance(scenario, dict):
+                    continue
+                sid = generated(scenario.get("id"), f"SCE-{rid}-{scenario_index}")
+                for step_index, step in enumerate(items(scenario, "steps"), 1):
+                    if not isinstance(step, dict):
+                        continue
+                    step_id = unique(generated(step.get("id"), f"STEP-{rid}-{scenario_index}-{step_index}"), self.steps)
+                    record = {"id": step_id, "scenario": {"id": sid, "name": text(scenario.get("name"))}}
                     for key in ("Given", "When", "Then"):
-                        record[key] = step.get(key, step.get(key.lower(), ""))
+                        record[key] = text(step.get(key, step.get(key.lower(), "")))
                     record["references"] = items(step, "references")
                     self.steps[step_id] = record
                     self.own_steps[rid].append(step_id)
-            self.children[rid] = [visit(child) for child in items(node, "children")]
+            self.children[rid] = [child for child in (visit(child) for child in items(node, "children")) if child]
             self.postorder.append(rid)
             return rid
 
         visit(root)
+        if not self.requirements:
+            raise ValueError("The requirement tree has no requirement nodes")
         # Only leaves own business analysis; parents organize the requirement tree.
         self.leaves = [rid for rid in self.requirements if not self.children[rid]]
+        if self.generated_ids:
+            print(f"[INPUT WARNING] Generated {len(self.generated_ids)} missing or duplicate identifier(s): "
+                + ", ".join(sorted(set(self.generated_ids))[:20]), flush=True)
 
     def concatenated_steps(self, requirement_id: str) -> str:
         """Render only this requirement's own steps, preserving scenario labels, Given/When/Then, and references."""

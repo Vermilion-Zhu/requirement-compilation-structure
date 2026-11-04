@@ -16,6 +16,7 @@ from infrastructure.shared.models.text import TextModel
 from infrastructure.utils.presentation.console import DemoConsole
 from infrastructure.shared.project.dependencies import install_dependencies
 from infrastructure.utils.files import save_json
+from infrastructure.shared.project import runtime_events
 from infrastructure.shared.project.git import checkpoint
 
 
@@ -122,7 +123,7 @@ def implement_backend_tdd(arc_dir: Path, pause: bool = False, max_turns: int = 1
     contracts = read_artifact(arc_dir, "backend_apis.json")
     output = arc_dir.parent.resolve()
     if not (output / "backend/src/db/initialize.ts").is_file():
-        raise ValueError("Run 00_project_initialization.py and 05_implement_db.py first")
+        raise ValueError("Run the project-initialization (00) and database-implementation (05) passes first")
     for name in schema["entities"]:
         if not (output / f"backend/src/db/tables/{name}.sql").is_file():
             raise ValueError(f"Missing implemented SQL for {name}; run step 05")
@@ -263,6 +264,10 @@ def implement_backend_tdd(arc_dir: Path, pause: bool = False, max_turns: int = 1
                     entry["status"] = "GREEN"
                 save_json(arc_dir / "backend_tdd.json", report)
             report["requirements"][rid]["status"] = "GREEN" if all(aid in accepted for aid in ids) else "FAILED"
+            if report["requirements"][rid]["status"] == "GREEN":
+                runtime_events.implementation_done(rid)
+            else:
+                runtime_events.implementation_failed(rid, "backend acceptance tests failed")
             save_json(arc_dir / "backend_tdd.json", report)
             console.show(f"{requirement_label} | " + report["requirements"][rid]["status"], "Proceed to the next requirement; failed APIs remain recorded.")
         all_files = [targets[aid] for aid in accepted]

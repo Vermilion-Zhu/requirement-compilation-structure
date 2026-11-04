@@ -10,6 +10,7 @@ from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.utils.presentation.console import show_panel
 from infrastructure.utils.presentation.logging import console_log
 from infrastructure.utils.files import save_json
+from infrastructure.shared.project import runtime_events
 from infrastructure.shared.project.git import checkpoint
 
 
@@ -27,6 +28,8 @@ class Compiler:
         self.artifacts: dict[str, object] = {}
         self.current_stage: str | None = None
         self.report = {"status": "NOT_STARTED", "stages": {}}
+        # Best-effort ARC-Bench visualization state; never blocks compilation.
+        runtime_events.initialize(self.output_dir)
 
     def _run(self, module: str, function: str, *arguments, **options):
         """Attempt every pass; keep failures explicit without aborting later passes.
@@ -68,12 +71,15 @@ class Compiler:
         """Execute the 13 compilation passes in order and return the generated application directory."""
         self.artifacts.clear()
         self.report = {"status": "RUNNING", "stages": {}}
+        runtime_events.start("compilation started")
         show_panel("Requirement compiler | Pipeline",
             f"Input: {self.input_dir}\nOutput: {self.output_dir}\nPasses: 13\nDetailed model logs: {'enabled' if self.model_log else 'disabled'}")
         self.artifacts["project_files"] = self._run(
             "00_project_initialization", "project_initialization", self.output_dir, port=self.port)
         self.artifacts["requirements"] = self._run(
             "01_explore_requirement", "explore_requirement", self.input_dir, self.arc_dir)
+        if isinstance(self.artifacts["requirements"], dict):
+            runtime_events.store_requirement_tree(self.artifacts["requirements"])
         self.artifacts["db_schema"] = self._run(
             "02_build_db_schema", "build_db_schema", self.arc_dir)
         self.artifacts["db_obligations"] = self._run(
@@ -103,6 +109,8 @@ class Compiler:
         save_json(self.arc_dir / "compilation.json", self.report)
         checkpoint(self.output_dir, stage="compiler", task="pipeline", action="Publish final compilation report",
             status=self.report["status"], details={"stages": self.report["stages"], "incomplete_stages": incomplete})
+        runtime_events.finish(self.report["status"] == "GREEN",
+            f"{self.report['status']}: {len(incomplete)} incomplete pass(es)")
         show_panel("[DONE] Requirement compilation | " + self.report["status"],
             f"Application: {self.output_dir}\nReport: {self.arc_dir / 'compilation.json'}"
             + ("\nIncomplete stages: " + ", ".join(incomplete) if incomplete else ""),

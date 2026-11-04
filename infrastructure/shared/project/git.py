@@ -10,7 +10,8 @@ IGNORE_RULES = (
     "node_modules/", "dist/", "build/", "coverage/", "test-results/", "playwright-report/",
     "backend/data/", "*.db", "*.db-wal", "*.db-shm", "*.sqlite", "*.sqlite3",
     ".env", ".env.*", "!.env.example", "compiler.log", "model_calls.jsonl", ".arc/model_logs/",
-    ".arc/baseline_backup/", "__pycache__/", ".venv/",
+    ".arc/baseline_backup/", ".arc/traceability/", ".arc/runner-events.jsonl",
+    "__pycache__/", ".venv/",
 )
 
 
@@ -150,6 +151,8 @@ def checkpoint(output=None, *, stage=None, task, action, status="GREEN", details
             + "\n\nChanged files:\n" + (changed or "No tracked file changes; execution checkpoint.") + "\n")
         revision = repository.commit(message)
         print(f"[GIT] {revision[:8]} {title}", flush=True)
+        from infrastructure.shared.project import runtime_events
+        runtime_events.commit(revision, title)
         return revision
     except GitError as error:
         print(f"[GIT WARNING] Checkpoint failed for {task}: {error}", flush=True)

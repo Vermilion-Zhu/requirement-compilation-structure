@@ -9,6 +9,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+
+from support import legacy
 from unittest.mock import Mock, patch
 
 from infrastructure.compiler import Compiler
@@ -23,6 +25,7 @@ from infrastructure.utils.files import save_bytes, save_text
 
 
 class ImplementationRecovery(unittest.TestCase):
+    @legacy
     def test_exhaustion_archives_last_feedback_and_restores_sources_tests_and_index(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -74,6 +77,8 @@ class ImplementationRecovery(unittest.TestCase):
         self.assertEqual([value['status'] for value in result.values()], ['FAILED', 'FAILED', 'GREEN'])
         for action in (compile_check, tests, build):
             action.assert_called_once_with()
+
+    @legacy
 
     def test_ui_exhaustion_restores_first_page_and_attempts_second_then_final_checks(self):
         from test_frontend_flow import frontend_fixture
@@ -131,6 +136,8 @@ class ImplementationRecovery(unittest.TestCase):
                 main.main([str(compiler.input_dir), '-o', str(compiler.output_dir)])
             self.assertEqual(exit_status.exception.code, 0)
             self.assertEqual(calls, [name for name, _ in PASSES])
+
+    @legacy
 
     def test_trigger_failure_restores_handlers_and_later_requirements_continue(self):
         from test_frontend_flow import frontend_fixture

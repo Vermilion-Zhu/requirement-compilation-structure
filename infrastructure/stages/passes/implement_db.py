@@ -54,11 +54,11 @@ def implement_db(arc_dir: Path, pause: bool = False, max_attempts: int = 10, max
         raise ValueError("--max-turns must be positive")
     source = arc_dir / "db_schema.json"
     if not source.is_file():
-        raise ValueError("Run 02_build_db_schema.py first to create .arc/db_schema.json")
+        raise ValueError("Run the database-schema pass (02) first to create .arc/db_schema.json")
     output_dir = arc_dir.parent.resolve()
     for required in ("backend/package.json", "backend/src/db/client.ts", "backend/src/db/initialize.ts"):
         if not (output_dir / required).is_file():
-            raise ValueError("Run 00_project_initialization.py first to initialize the project structure")
+            raise ValueError("Run the project-initialization pass (00) first to initialize the project structure")
     schema = json.loads(source.read_text(encoding="utf-8-sig"))
     console = DemoConsole(pause)
     # --- Extension point 05B: dependency-aware table implementation -----------

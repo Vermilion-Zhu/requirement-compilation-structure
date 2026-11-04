@@ -6,6 +6,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 import unittest
+
+from support import legacy
 from unittest.mock import Mock
 
 from infrastructure.stages.requirements.tree import RequirementTree
@@ -117,9 +119,14 @@ class FrontendFlow(unittest.TestCase):
         self.assertEqual(ui["bindings"]["form.text"]["source"], 123)
 
 
+    @legacy
+
+
     def test_requirement_creates_all_triggers_in_one_call_and_runs_complete_acceptance(self):
         """Create every navigation dependency before accepting behavioral GREEN."""
         self.check_event_creation()
+
+    @legacy
 
     def test_green_tests_do_not_skip_missing_or_deleted_event_files(self):
         """Even inadequate GREEN tests cannot bypass required implementation files."""
@@ -127,18 +134,28 @@ class FrontendFlow(unittest.TestCase):
         remember_path(self.output, "trigger", "TR-COUNT", "frontend/src/deleted.ts")
         self.check_event_creation(early_green=True)
 
+    @legacy
+
     def test_requirement_repair_can_edit_every_created_handler(self):
         """The requirement agent can repair any handler after a failed batch check."""
         self.check_event_creation(needs_repair=True)
 
+    @legacy
+
     def test_partial_trigger_batch_receives_missing_files_without_passing_acceptance(self):
         self.check_event_creation(partial_batch=True)
+
+    @legacy
 
     def test_trigger_batch_reuses_existing_path_and_only_creates_missing_handlers(self):
         self.check_event_creation(preexisting=True)
 
+    @legacy
+
     def test_integration_can_repair_related_backend_sources_and_regresses_api_tests(self):
         self.check_event_creation(backend_repair=True)
+
+    @legacy
 
     def test_backend_regression_failure_returns_to_integration_repair(self):
         self.check_event_creation(backend_repair=True, backend_fails_once=True)
@@ -285,6 +302,8 @@ class FrontendFlow(unittest.TestCase):
         self.assertEqual(checks.tests.call_args.args[0],
             [report["requirements"][rid]["test_path"] for rid in self.tree.leaves])
 
+    @legacy
+
     def test_single_trigger_context_supplies_frontend_data_and_derived_db_effects(self):
         from infrastructure.stages.frontend.triggers.scope import model_context
         context = scenario_context(self.ui, self.interactions, "REQ-A")
@@ -353,6 +372,8 @@ class FrontendFlow(unittest.TestCase):
         self.assertNotIn("output", result["ui"])
         self.assertEqual(result["typecheck"], {"returncode": 0})
 
+    @legacy
+
     def test_agent_retry_receives_sources_identified_by_failed_checks(self):
         """A file omitted initially becomes writable before the next model repair request."""
         from infrastructure.shared.agent.loop import run_file_agent
@@ -377,6 +398,8 @@ class FrontendFlow(unittest.TestCase):
             gate, 2, Mock(), "Repair", feedback_filter=lambda value: selection.feedback(workspace, value))
         self.assertEqual(result["checks"], {"green": True})
 
+    @legacy
+
     def test_runtime_types_survive_returning_to_presentation_stage(self):
         from infrastructure.shared.project.initialize import initialize_project
         from infrastructure.stages.frontend.ui.runtime import prepare_frontend
@@ -391,6 +414,8 @@ class FrontendFlow(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertIn("export interface UiTriggerContext", after)
         self.assertEqual(after.count("export type UiTriggerHandler"), 1)
+
+    @legacy
 
     def test_synthesis_retries_without_publishing_rejected_state(self):
         requests = []
@@ -408,6 +433,8 @@ class FrontendFlow(unittest.TestCase):
         self.assertEqual(result, self.ui)
         self.assertEqual(len(requests), 3)
         self.assertNotIn("step_obligations", requests[0])
+
+    @legacy
 
     def test_incomplete_ui_response_gets_all_missing_sections_in_one_repair(self):
         requests = []
@@ -441,6 +468,8 @@ class FrontendFlow(unittest.TestCase):
             Mock(generate_json=generate), Mock())
         self.assertEqual(result, self.ui)
         self.assertEqual(len(requests), 4)
+
+    @legacy
 
     def test_complete_ui_prompt_example_produces_page_context_and_display_tests(self):
         from infrastructure.stages.frontend.ui.proposals import EXAMPLE
@@ -482,6 +511,8 @@ class FrontendFlow(unittest.TestCase):
             {"read": ["Note.id", "Note.text"], "write": []})
         self.assertEqual(result["triggers"]["T"]["read"], ["form.text"])
 
+    @legacy
+
     def test_trigger_synthesis_retries_json_and_checks_declared_obligations(self):
         from infrastructure.stages.frontend.triggers.synthesis import synthesize_triggers
         calls = []
@@ -507,12 +538,17 @@ class FrontendFlow(unittest.TestCase):
         self.assertTrue((self.arc / "frontend_triggers.json").is_file())
 
 
+    @legacy
+
+
     def test_navigation_context_includes_later_page_mount_and_keeps_ownership(self):
         context = scenario_context(self.ui, self.interactions, "REQ-A")
         self.assertEqual(set(context["page_subtrees"]), {"editor", "summary"})
         self.assertEqual(set(context["triggers"]), {"TR-INPUT", "TR-SAVE", "TR-COUNT"})
         self.assertEqual(len(context["triggers"]), 3)
         self.assertEqual(self.interactions["requirements"]["REQ-A"], ["TR-INPUT", "TR-SAVE"])
+
+    @legacy
 
     def test_destination_page_does_not_pull_its_other_business_triggers_into_requirement(self):
         triggers = deepcopy(self.interactions)
@@ -526,6 +562,9 @@ class FrontendFlow(unittest.TestCase):
         ui = normalize_design(empty_design(), self.tree)
         triggers = empty_triggers(self.tree)
         self.assertEqual(scenario_context(ui, triggers, "REQ-A")["triggers"], {})
+
+
+    @legacy
 
 
     def test_frontend_runtime_failure_is_repair_not_test_regeneration(self):

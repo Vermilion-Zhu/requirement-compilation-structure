@@ -10,7 +10,9 @@ import yaml
 
 from infrastructure.shared.models.vision import VisualModel
 from infrastructure.utils.presentation.console import DemoConsole
-from infrastructure.utils.files import save_json, save_text
+from infrastructure.utils.files import save_json
+from infrastructure.stages.requirements.input_materials import (
+    collect_materials, publish_input_snapshot, resolve_images)
 from infrastructure.stages.requirements.tree import RequirementTree
 from infrastructure.shared.project.git import checkpoint
 
@@ -230,26 +232,35 @@ def load_requirements(path: Path) -> dict:
     return root
 
 
-def collect_images(value: object) -> list[str]:
-    """Collect description.image references recursively in first-seen order."""
+def collect_images(value: object, warnings: list | None = None) -> list[str]:
+    """Collect description.image references recursively in first-seen order.
+
+    Malformed entries are reported through ``warnings`` instead of aborting: a task
+    with one unreadable ``image:`` block must still compile the rest of its
+    requirements.
+    """
+    warnings = warnings if warnings is not None else []
     references = []
     if isinstance(value, dict):
         description = value.get("description")
         if isinstance(description, dict):
             images = description.get("image", [])
             if not isinstance(images, list):
-                raise ValueError("description.image must be a list")
+                warnings.append({"path": "description.image", "reason": "must be a list of image entries"})
+                images = []
             for image in images:
                 if not isinstance(image, dict) or not isinstance(image.get("reference"), str):
-                    raise ValueError("Each image must have a string reference")
+                    warnings.append({"path": "description.image", "reason": "each entry needs a string reference"})
+                    continue
                 if not image["reference"].strip():
-                    raise ValueError("Image reference must not be empty")
+                    warnings.append({"path": "description.image", "reason": "image reference must not be empty"})
+                    continue
                 references.append(image["reference"])
         for child in value.values():
-            references.extend(collect_images(child))
+            references.extend(collect_images(child, warnings))
     elif isinstance(value, list):
         for child in value:
-            references.extend(collect_images(child))
+            references.extend(collect_images(child, warnings))
     return list(dict.fromkeys(references))
 
 
@@ -268,41 +279,48 @@ def explore_requirement(input_dir: Path, arc_dir: Path, pause: bool = False) -> 
     try:
         text = json.dumps(requirements, ensure_ascii=False, indent=2, allow_nan=False)
     except (TypeError, ValueError) as error:
-        raise ValueError(f"Cannot convert requirement fields to JSON: {error}") from error
+        raise ValueError("Cannot convert requirement fields to JSON: " + str(error)) from error
     console.artifact("requirements", requirements, "1. Requirement tree")
 
     # --- Extension point 01B: reference discovery ------------------------------
     # collect_images() defines which references count as visual evidence.
     # Extend discovery for other document formats; keep paths input-relative.
-    references = collect_images(requirements)
-    for reference in references:
-        image = (input_dir / reference).resolve()
-        if not image.is_relative_to(input_dir.resolve()):
-            raise ValueError(f"Referenced image must be inside the input directory: {reference}")
-        if not image.is_file():
-            raise ValueError(f"Referenced image does not exist: {reference}")
+    # Publishing the snapshot first keeps every later pass runnable even when an
+    # optional attachment or visual reference is unusable.
+    reference_warnings = []
+    references = collect_images(requirements, reference_warnings)
+    materials = collect_materials(input_dir)
+    images, image_warnings = resolve_images(input_dir, references)
+    warnings = [*materials["warnings"], *reference_warnings, *image_warnings]
+    publish_input_snapshot(arc_dir, text, references, materials=materials, warnings=warnings)
     console.show("2. Referenced images", "\n".join(references) or "(No referenced images.)")
+    if materials["files"]:
+        console.show("2b. Additional requirement materials", "\n".join(
+            f"{item['path']} ({item['kind']}, {item['bytes']} bytes)" for item in materials["files"]))
+    if warnings:
+        console.show("2c. Input warnings (non-fatal)", json.dumps(warnings, ensure_ascii=False, indent=2))
 
     # --- Extension point 01C: visual analysis ----------------------------------
     # Rewrite the prompt/model in infrastructure/shared/models/vision.py to compare
     # visual extraction strategies. Keep {layout, elements, style}, or update
     # the response validator and downstream consumers together.
-    arc_dir.mkdir(parents=True, exist_ok=True)
-    save_text(arc_dir / "requirements.json", text + "\n")
     checkpoint(arc_dir.parent, stage="01", task="requirements", action="Publish input requirement snapshot",
-        details={"source": str(source), "image_references": references})
+        details={"source": str(source), "image_references": references,
+            "resolved_images": sorted(images), "warnings": warnings})
     analysis = {}
-    if references:
+    if images:
         model = VisualModel()
-        for reference in references:
+        for reference, image in images.items():
             print(f"Analyzing image: {reference}", flush=True)
-            analysis[reference] = model.analyze(input_dir / reference)
+            analysis[reference] = model.analyze(image)
             save_json(arc_dir / "visual_analysis.json", analysis)
             checkpoint(arc_dir.parent, stage="01", task=reference, action="Publish visual reference analysis",
                 details={"reference": reference, "analysis": analysis[reference]})
             console.show(f"3. Visual analysis | {reference}", json.dumps(analysis[reference], ensure_ascii=False, indent=2))
     else:
-        console.show("3. Visual analysis", "No referenced images; no model call is needed.")
+        console.show("3. Visual analysis", "No analyzable reference images; no model call is needed.")
     save_json(arc_dir / "visual_analysis.json", analysis)
     print(f"Results saved: {arc_dir / 'requirements.json'}, {arc_dir / 'visual_analysis.json'}")
+    if warnings:
+        print(f"[INPUT WARNINGS] {len(warnings)} non-fatal input problem(s); see {arc_dir / 'input_warnings.json'}")
     return requirements

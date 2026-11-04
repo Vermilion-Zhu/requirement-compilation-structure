@@ -11,9 +11,10 @@ def propose_files(output, contents, **extra):
         path, content = item['path'], item['content']
         file = output / path
         before = item.get('old_content', staged.get(path, read_source(file) if file.resolve().is_relative_to(output.resolve()) and file.is_file() else None))
-        arguments = {'path': path, 'operation': 'create' if before is None else 'replace', 'new_content': content}
+        call = {'tool': 'edit_file', 'path': path,
+            'operation': 'create' if before is None else 'replace', 'new_content': content}
         if before is not None:
-            arguments['old_content'] = before
-        calls.append({'tool': 'edit_file', 'arguments': arguments})
+            call['old_content'] = before
+        calls.append(call)
         staged[path] = content
     return {**extra, 'tool_calls': calls}

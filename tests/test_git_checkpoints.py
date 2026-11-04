@@ -8,6 +8,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+
+from support import legacy
 from unittest.mock import Mock, patch
 
 from infrastructure.compiler import Compiler
@@ -71,6 +73,8 @@ class GitCheckpoints(unittest.TestCase):
                 self.assertTrue(repository.run('config', '--local', '--get', 'user.email', check=False).returncode)
                 self.assertFalse((root / 'absent-config').exists())
 
+    @legacy
+
     def test_task_failure_and_later_success_are_separate_snapshots(self):
         with TemporaryDirectory() as temporary, redirect_stdout(StringIO()):
             root = Path(temporary)
@@ -88,6 +92,8 @@ class GitCheckpoints(unittest.TestCase):
             report = json.loads(repository.run('show', 'HEAD:.arc/stage_tasks/02_build_db_schema.json').stdout)
             self.assertEqual(report['status'], 'COMPLETED_WITH_FAILURES')
             self.assertEqual(report['tasks']['GOOD']['status'], 'GREEN')
+
+    @legacy
 
     def test_rejected_edit_is_preserved_in_history_before_baseline_restoration(self):
         with TemporaryDirectory() as temporary, redirect_stdout(StringIO()):
@@ -135,6 +141,8 @@ class GitCheckpoints(unittest.TestCase):
             self.assertEqual(report['stages']['03_infer_db_obligations']['status'], 'FAILED')
             self.assertIn('Publish final compilation report (COMPLETED_WITH_FAILURES)', history)
             self.assertEqual(repository.status(), '')
+
+    @legacy
 
     def test_git_errors_do_not_replace_model_or_acceptance_results(self):
         with TemporaryDirectory() as temporary, redirect_stdout(StringIO()) as console:

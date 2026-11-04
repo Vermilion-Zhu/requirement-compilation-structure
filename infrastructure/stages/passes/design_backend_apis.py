@@ -17,6 +17,7 @@ from infrastructure.shared.agent.proposals import propose_json
 from infrastructure.shared.agent.tasks import TaskFailures
 from infrastructure.shared.agent.discovery import ContextIndex
 from infrastructure.shared.agent.conventions import CONVENTION_RULES, load_conventions, select_conventions, merge_conventions
+from infrastructure.shared.project import runtime_events
 
 
 INSTRUCTIONS = """Design complete backend APIs for the supplied leaf requirement and scenarios.
@@ -196,6 +197,11 @@ def design_backend_apis(arc_dir: Path, pause: bool = False, top_k: int = 6, max_
             save_json(arc_dir / "backend_apis.json", design)
             save_json(arc_dir / "shared_conventions.json", conventions)
             console.artifact("backend_apis", design, f"{label} | Accepted APIs")
+    for requirement_id, entry in failures.report["tasks"].items():
+        if entry["status"] == "FAILED":
+            runtime_events.design_failed(requirement_id, entry.get("error"))
+        else:
+            runtime_events.design_done(requirement_id)
     failures.finish()
     # --- Extension point 06B: API -> DB Access Primitive decomposition ---------
     # Intentionally absent: an API directly accesses the database in step 08.

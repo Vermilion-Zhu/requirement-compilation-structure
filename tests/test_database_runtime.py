@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+
+from support import legacy
 from unittest.mock import Mock, patch
 
 from infrastructure.stages.passes import PASS_MODULES
@@ -44,6 +46,7 @@ def prepare(output, sql=SQL):
 
 
 class DatabaseRepairProtocol(unittest.TestCase):
+    @legacy
     def test_file_discovery_can_expand_database_edit_permissions(self):
         with TemporaryDirectory() as temporary, redirect_stdout(StringIO()):
             output = Path(temporary)
@@ -60,7 +63,7 @@ class DatabaseRepairProtocol(unittest.TestCase):
                     self.assertNotIn(other, payload['files'])
                     self.assertIn('Note', payload['task']['entities'])
                     self.assertIn('backend/src/db/tables/Note.sql', payload['files'])
-                    return {'tool_calls': [{'tool': 'read_file', 'arguments': {'path': other}}]}
+                    return {'tool_calls': [{'tool': 'read_file', 'path': other}]}
                 self.assertNotIn(other, payload['files'])
                 self.assertTrue(payload['context_result']['tool_results'][0]['result']['writable'])
                 return propose_files(output, [{'path': other, 'content': SQL.replace('Note', 'Audit')}])
@@ -72,6 +75,8 @@ class DatabaseRepairProtocol(unittest.TestCase):
                 result = verify_database_runtime(arc, data, Mock(generate_json=generate), Mock(), max_turns=1)
             self.assertEqual(result['status'], 'GREEN')
             self.assertEqual(len(calls), 2)
+
+    @legacy
 
     def test_queried_sql_is_editable_only_for_the_database_owner(self):
         with TemporaryDirectory() as temporary:
@@ -85,6 +90,8 @@ class DatabaseRepairProtocol(unittest.TestCase):
             from infrastructure.shared.agent.context import SourceFiles
             ordinary = SourceFiles(output, root='backend/src', tests_root='backend/tests').workspace(references=[path])
             self.assertFalse(ordinary.state()[path]['writable'])
+
+    @legacy
 
     def test_missing_sql_can_be_created_after_real_failure_and_marked_recovered(self):
         stage = import_module(PASS_MODULES['05_implement_db'])

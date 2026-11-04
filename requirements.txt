@@ -4,3 +4,5 @@ python-dotenv
 httpx
 rich>=13,<15
 Pillow>=11,<13
+# Local visualization SDK bundled at the ZIP root; installs before main.py runs.
+./arcbench-agent-runtime

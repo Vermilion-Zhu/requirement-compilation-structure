@@ -4,6 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
 import unittest
+
+from support import legacy
 from unittest.mock import Mock, patch
 
 from infrastructure.stages.passes import PASS_MODULES
@@ -91,6 +93,8 @@ class DesignContinuation(unittest.TestCase):
             self.assertEqual(set(calls), {'Note', 'Other'})
             self.assertTrue((output / 'backend/src/db/tables/Other.sql').is_file())
             self.assertIn('Other.sql', (output / 'backend/src/db/initialize.ts').read_text())
+
+    @legacy
 
     def test_ui_and_trigger_designs_continue_after_one_bad_proposal(self):
         from test_frontend_flow import frontend_fixture

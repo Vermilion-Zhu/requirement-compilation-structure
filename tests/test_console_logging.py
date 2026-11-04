@@ -57,8 +57,11 @@ class ConsoleLogging(unittest.TestCase):
                         self.assertEqual(model.client.timeout, 600)
                         if isinstance(model, TextModel):
                             self.assertEqual(model.max_output_tokens, 320000)
-                        self.assertEqual(transport.timeout.as_dict(),
-                            {"connect": 600, "read": 600, "write": 600, "pool": 600})
+                        # Vendored httpx builds may nest the configured value once more.
+                        configured = transport.timeout
+                        self.assertEqual([getattr(getattr(configured, name), "connect",
+                            getattr(configured, name)) for name in ("connect", "read", "write", "pool")],
+                            [600, 600, 600, 600])
                         self.assertEqual(model.client.max_retries, 2)
                     finally:
                         model.client.close()

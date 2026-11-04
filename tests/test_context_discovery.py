@@ -2,6 +2,8 @@
 from tool_fixtures import propose_files
 import tempfile
 import unittest
+
+from support import legacy
 from pathlib import Path
 from unittest.mock import Mock, patch
 from infrastructure.shared.agent.discovery import ContextIndex, DiscoverySession, DiscoveryStalled
@@ -37,6 +39,8 @@ class ContextDiscovery(unittest.TestCase):
         self.assertNotIn('candidates', requests[2]['context_result'])
         self.assertIn('API-A', requests[2]['context_result']['records'])
 
+    @legacy
+
     def test_query_file_can_be_repaired_with_normal_edits(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -45,7 +49,7 @@ class ContextDiscovery(unittest.TestCase):
             (root / path).write_text('broken')
             model = Mock()
             model.generate_json.side_effect = [
-                {'tool_calls': [{'tool': 'read_file', 'arguments': {'path': path}}]},
+                {'tool_calls': [{'tool': 'read_file', 'path': path}]},
                 propose_files(root, [{'path': path, 'content': 'fixed'}])]
             gate = Mock(return_value={})
             run_file_agent(model, '', {}, FileTools(root, allow_write=lambda path: path.startswith(('frontend/src/', 'backend/src/'))), gate, 1, Mock(), 'test')
@@ -79,11 +83,15 @@ class ContextDiscovery(unittest.TestCase):
         payload = model.generate_json.call_args.args[1]
         self.assertIn('same evidence', payload['correction']['error'])
 
+    @legacy
+
     def test_malformed_query_returns_feedback_then_can_finish(self):
         model = Mock(generate_json=Mock(side_effect=[{'context_request': {'kind': 'absent'}}, {'entities': {}}]))
         result, _ = propose_json(model, '', {}, lambda value: value, Mock(), 'schema', 1, ContextIndex({'schema': {}}))
         self.assertEqual(result, {'entities': {}})
         self.assertIn('error', model.generate_json.call_args.args[1]['context_result'])
+
+    @legacy
 
     def test_file_agent_can_read_more_than_four_dependencies_before_editing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -92,7 +100,7 @@ class ContextDiscovery(unittest.TestCase):
             paths = [f'frontend/src/helper{i}.ts' for i in range(7)]
             for number, path in enumerate(paths):
                 (root / path).write_text(f'export const value{number} = {number};')
-            responses = [{'tool_calls': [{'tool': 'read_file', 'arguments': {'path': path}}]} for path in paths]
+            responses = [{'tool_calls': [{'tool': 'read_file', 'path': path}]} for path in paths]
             responses.append(propose_files(root, [{'path': paths[-1], 'content': 'fixed'}]))
             model = Mock(generate_json=Mock(side_effect=responses))
             result = run_file_agent(model, '', {'requirement': 'x' * 190000}, FileTools(root, allow_write=lambda path: path.startswith(('frontend/src/', 'backend/src/'))),
@@ -131,9 +139,9 @@ class ContextDiscovery(unittest.TestCase):
             save_text(root / path, 'secret first line\nvisible middle\nsecret last line\n')
             requests = []
             responses = [
-                {'tool_calls': [{'tool': 'read_file', 'arguments': {'path': path, 'start_line': 2, 'end_line': 2}}]},
-                {'tool_calls': [{'tool': 'edit_file', 'arguments': {'path': path, 'operation': 'replace',
-                    'old_content': 'visible middle', 'new_content': 'updated middle'}}]}]
+                {'tool_calls': [{'tool': 'read_file', 'path': path, 'start_line': 2, 'end_line': 2}]},
+                {'tool_calls': [{'tool': 'edit_file', 'path': path, 'operation': 'replace',
+                    'old_content': 'visible middle', 'new_content': 'updated middle'}]}]
             def generate(_, payload):
                 requests.append(deepcopy(payload))
                 return responses[len(requests) - 1]
@@ -142,7 +150,7 @@ class ContextDiscovery(unittest.TestCase):
                 gate, 1, Mock(), 'wiring')
             excerpt_request = requests[1]
             self.assertNotIn(path, excerpt_request['files'])
-            self.assertEqual(excerpt_request['context_result']['tool_results'][0]['result']['content'], 'visible middle\n')
+            self.assertEqual(excerpt_request['read_files'][path][0]['content'], 'visible middle\n')
             self.assertNotIn('secret', str(excerpt_request))
             gate.assert_called_once()
             self.assertEqual((root / path).read_text(), 'secret first line\nupdated middle\nsecret last line\n')

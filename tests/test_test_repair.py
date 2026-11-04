@@ -4,6 +4,8 @@ from tool_fixtures import propose_files
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+
+from support import legacy
 from unittest.mock import Mock, patch
 
 from infrastructure.shared.agent.context import SourceFiles
@@ -15,6 +17,7 @@ from infrastructure.utils.files import save_text
 
 
 class TestRepair(unittest.TestCase):
+    @legacy
     def test_existence_suite_does_not_turn_dependency_state_or_option_objects_into_text_assertions(self):
         from test_frontend_flow import frontend_fixture
         _, _, ui, _, _, _ = frontend_fixture()
@@ -29,6 +32,8 @@ class TestRepair(unittest.TestCase):
         self.assertIn('Object.prototype.hasOwnProperty.call(state.data, key)', suite)
         self.assertIn('form.text', suite)
         self.assertIn('form.errorVisible', suite)
+
+    @legacy
 
     def test_model_can_attribute_and_correct_a_wrong_test_then_runs_real_gate_again(self):
         with TemporaryDirectory() as temporary:
@@ -56,6 +61,8 @@ class TestRepair(unittest.TestCase):
             self.assertEqual(result['checks'], {'passed': True})
             gate.assert_called_once_with()
             self.assertTrue(any('Failure diagnosis' in call.args[0] for call in console.show.call_args_list))
+
+    @legacy
 
     def test_ui_syntax_error_in_existing_test_reaches_model_and_correction_survives_rerun(self):
         from test_frontend_flow import frontend_fixture

@@ -51,7 +51,8 @@ returning data from a create operation does not replace a later retrieval operat
 
 
 def infer_db_obligations(arc_dir: Path, pause: bool = False, top_k: int = 6, max_attempts: int = 10) -> dict:
-    for filename, previous in (("requirements.json", "01_explore_requirement.py"), ("db_schema.json", "02_build_db_schema.py")):
+    for filename, previous in (("requirements.json", "the requirement-exploration pass (01)"),
+        ("db_schema.json", "the database-schema pass (02)")):
         if not (arc_dir / filename).is_file():
             raise ValueError(f"Run {previous} first to create .arc/{filename}")
     if top_k < 1:
@@ -83,7 +84,7 @@ def infer_db_obligations(arc_dir: Path, pause: bool = False, top_k: int = 6, max
                 check_related_fields(schema, related_fields)
             except ValueError as error:
                 raise ValueError(f"Invalid schema associations for {rid} in .arc/db_schema.json. "
-                    f"Rerun 02_build_db_schema.py to repair the schema before inference. {error}") from error
+                    f"Rerun the database-schema pass (02) to repair the schema before inference. {error}") from error
             related_entities = {}
             for symbol in related_fields:
                 entity, field = symbol.split(".", 1)

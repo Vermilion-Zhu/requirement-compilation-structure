@@ -14,7 +14,7 @@ def implement_frontend_ui(input_dir: Path, arc_dir: Path, pause: bool = False,
     if max_turns < 1:
         raise ValueError("--max-turns must be positive")
     if not (arc_dir / "ui_design.json").is_file():
-        raise ValueError("Run 09_design_ui.py first to create .arc/ui_design.json")
+        raise ValueError("Run the UI-design pass (09) first to create .arc/ui_design.json")
     report = {"status": "VALIDATING", "pages": {}}
     save_json(arc_dir / "ui_checks.json", report)
     try:

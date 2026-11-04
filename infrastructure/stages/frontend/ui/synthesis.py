@@ -90,5 +90,5 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
     failures.finish()
     normalize_design(design, tree)
     save_json(arc_dir / "ui_design.json", design)
-    console.show("UI/data design complete for ALL requirements", f"Saved {arc_dir / 'ui_design.json'}\nRun 10_implement_ui.py for existence tests and UI implementation. Interactions belong to step 11.")
+    console.show("UI/data design complete for ALL requirements", f"Saved {arc_dir / 'ui_design.json'}\nRun the UI-implementation pass (10) for existence tests and page implementation. Interactions belong to step 11.")
     return design

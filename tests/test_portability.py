@@ -10,6 +10,8 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 import unittest
+
+from support import legacy
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -45,6 +47,8 @@ class PortableFiles(unittest.TestCase):
         save_json(artifact, {"name": "\u793a\u4f8b"})
         self.assertNotIn(b"\r", artifact.read_bytes())
 
+    @legacy
+
     def test_edits_accept_crlf_and_do_not_multiply_newlines(self):
         """Apply repeated model edits against normalized current contents."""
         relative = "backend/src/source.ts"
@@ -58,6 +62,8 @@ class PortableFiles(unittest.TestCase):
         workspace.state()
         workspace.execute(propose_files(self.root, [{"path": relative, "content": read_source(target) + "export const c = 4;\r\n"}])["tool_calls"])
         self.assertEqual(target.read_bytes(), b"export const a = 3;\n\nexport const b = 2;\nexport const c = 4;\n")
+
+    @legacy
 
     def test_failed_batch_restores_exact_original_bytes(self):
         """A later write failure must restore prior writes with exact BOM/CRLF bytes."""

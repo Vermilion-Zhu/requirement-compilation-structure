@@ -83,7 +83,7 @@ def requirement_nodes(root: dict):
 def build_db_schema(arc_dir: Path, pause: bool = False, top_k: int = 6, max_attempts: int = 10) -> dict:
     requirements_path = arc_dir / "requirements.json"
     if not requirements_path.is_file():
-        raise ValueError("Run 01_explore_requirement.py first to create .arc/requirements.json")
+        raise ValueError("Run the requirement-exploration pass (01) first to create .arc/requirements.json")
     requirements = json.loads(requirements_path.read_text(encoding="utf-8-sig"))
     # --- Extension point 02B: traversal and analysis context -------------------
     # RequirementTree owns traversal and step ownership. Study how another visit
