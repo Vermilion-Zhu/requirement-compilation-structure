@@ -123,6 +123,87 @@ def test_result(requirement_id: str, passed: bool, message: str | None = None) -
     _emit_events("mark_test_passed" if passed else "mark_test_failed", requirement_id, message)
 
 
+def _store():
+    """Return the traceability store when events are live."""
+    return _RUNTIME.traceability if enabled() else None
+
+
+def interface(interface_id: str, *, req_ids, kind: str, content: str,
+        file_path: str | None = None, callers=(), callees=()) -> None:
+    """Publish one API, page or trigger contract for the traceability graph."""
+    store = _store()
+    if store is None or not str(interface_id or "").strip():
+        return
+    try:
+        store.upsert_interface(interface_id=interface_id, req_ids=list(req_ids), type=kind,
+            content=content, file_path=file_path, implemented=False,
+            callers=list(callers), callees=list(callees))
+    except Exception as error:
+        _warn(f"traceability interface failed: {type(error).__name__}: {error}")
+
+
+def interface_implemented(interface_id: str, file_path: str | None = None,
+        message: str | None = None) -> None:
+    """Mark a published contract as implemented, optionally recording its file."""
+    store = _store()
+    if store is None:
+        return
+    try:
+        if store.get_interface(interface_id) is None:
+            return
+        fields = {"implemented": True}
+        if file_path:
+            fields["file_path"] = file_path
+        store.update_interface_fields(interface_id, **fields)
+    except Exception as error:
+        _warn(f"traceability interface status failed: {type(error).__name__}: {error}")
+
+
+def link(interface_id: str, *, callers=(), callees=()) -> None:
+    """Merge caller/callee relationships without dropping the rest of a contract row."""
+    store = _store()
+    if store is None:
+        return
+    try:
+        current = store.get_interface(interface_id)
+        if current is None:
+            return
+        def merged(key, additions):
+            return sorted(set(current.get(key) or []) | {str(item) for item in additions if str(item)})
+        store.upsert_interface(interface_id=interface_id, req_ids=current.get("req_ids") or [],
+            type=current.get("type") or "", content=current.get("content") or "",
+            file_path=current.get("file_path"), first_line=current.get("first_line"),
+            implemented=bool(current.get("implemented")),
+            callers=merged("callers", callers), callees=merged("callees", callees), emit_event=False)
+    except Exception as error:
+        _warn(f"traceability link failed: {type(error).__name__}: {error}")
+
+
+def test_case(test_id: str, *, requirement_id: str, kind: str, file_path: str | None = None,
+        passed: bool | None = None, scenario_id: str | None = None, interface_ids=()) -> None:
+    """Publish one generated test case and its current pass status."""
+    store = _store()
+    if store is None or not str(test_id or "").strip() or not str(requirement_id or "").strip():
+        return
+    try:
+        store.upsert_test(test_id=test_id, req_id=requirement_id, type=kind, file_path=file_path,
+            passed=passed, scenario_id=scenario_id, interface_ids=list(interface_ids))
+    except Exception as error:
+        _warn(f"traceability test failed: {type(error).__name__}: {error}")
+
+
+def test_passed(test_id: str, passed: bool) -> None:
+    """Update one published test's status after a re-run."""
+    store = _store()
+    if store is None:
+        return
+    try:
+        if store.get_test(test_id) is not None:
+            store.set_test_pass_status(test_id, passed)
+    except Exception as error:
+        _warn(f"traceability test status failed: {type(error).__name__}: {error}")
+
+
 def commit(revision: str, message: str | None = None) -> None:
     """Ask the website to refresh its commit history after a checkpoint."""
     _emit_events("notify_commit_history_changed", message or f"checkpoint {revision[:8]}")

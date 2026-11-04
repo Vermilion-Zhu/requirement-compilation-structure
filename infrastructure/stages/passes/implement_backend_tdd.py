@@ -196,6 +196,9 @@ def implement_backend_tdd(arc_dir: Path, pause: bool = False, max_turns: int = 1
                         if status == "RED_CONFIRMED":
                             report["red"][aid] = {key: result[key] for key in ("tests", "pass", "fail")}
                         entry["test_status"] = status
+                        runtime_events.test_case(f"api:{aid}",
+                            requirement_id=api_owners[0], kind="api", file_path=chosen,
+                            passed=status == "GREEN", interface_ids=[aid])
                         console.show(f"{aid} | HTTP tests: {status}", result["output"])
                         save_json(arc_dir / "backend_tdd.json", report)
                         checkpoint(output, stage="08", task=aid, action="Run HTTP tests before implementation",
@@ -256,6 +259,8 @@ def implement_backend_tdd(arc_dir: Path, pause: bool = False, max_turns: int = 1
                         implementation_gate, max_turns, console, aid + " / Implementation", feedback=current,
                         feedback_filter=lambda value: selection.feedback(workspace, value), context_index=context_index)
                     accepted.append(aid)
+                    runtime_events.interface_implemented(aid, selected_path(output, "api", aid))
+                    runtime_events.test_passed(f"api:{aid}", True)
                     result = agent["checks"]["tests"]
                     report["green"][aid] = {key: result[key] for key in ("tests", "pass", "fail")}
                     report["agents"][f"implementation:{aid}"] = {"turns": agent["turns"]}

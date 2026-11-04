@@ -50,9 +50,10 @@
 | **M9 输入容错** | 只读 `requirements.yaml`；任何一张引用图缺失都会在**写出需求快照之前**抛错，导致 02–12 全部连锁失败；场景/步骤缺 `id` 会 `KeyError` | 新增 `stages/requirements/input_materials.py`：先落盘 `requirements.json`，再收集 `requirements.md` / `prerequisites.md` / `assets/` / `reference/` 到 `.arc/input_materials.json`；缺失、越界或格式错误的图片与材料只记 `.arc/input_warnings.json` 并在日志中以 `[INPUT WARNING]` 提示；`RequirementTree` 对缺失/重复 id、非字符串 `description`、非列表 `children` 做确定性归一化 |
 | **S3 文案** | 运行期报错仍提示 "Run 00_project_initialization.py first"，线上看不到这个文件 | 全部改为 pass 名称，例如 "Run the project-initialization pass (00) first" |
 | **S1 可视化为空** | 网站上没有逐需求状态、追溯视图与提交历史 | 内置 `arcbench-agent-runtime`（ZIP 根目录 + `requirements.txt` 的 `./arcbench-agent-runtime`），新增 `shared/project/runtime_events.py` 适配层：记录 run 状态、需求树、`DESIGNED / IMPLEMENTED / PASSED` 状态与提交历史刷新信号；SDK 缺失或目录不可写时**静默降级**，绝不影响编译 |
+| **契约可视化** | `interfaces` / `tests` 两张表一直是空的，网站只能看到需求级状态 | 06 写入 API 契约（含需求归属），09 写入页面契约，11 写入 trigger 契约并回填 API 的 `callers`；08 / 10 / 12 写入后端、UI、E2E、独立验收四类测试行（含文件路径与通过状态），API 实现完成后回填 `implemented` 与实现文件 |
 | **测试基线** | 仓库原有 47 条用例针对已被替换的契约（整文件替换、编译器托管 wiring、扁平 tool call），长期红着，掩盖真实回归 | 修好可由当前 API 表达的（导入、签名、tool 形状、`schemas()` 结构、httpx 超时断言）；其余以 `ARC_LEGACY_TESTS=1` 门控跳过并注明原因 |
 
-测试现状：`203 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`211 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -110,18 +111,22 @@ uv run python scripts\package.py -o compiler.zip
 
 - 打包脚本产出结构正确的 ZIP（`main.py`、`requirements.txt`、`infrastructure/stages/passes/`、
   `arcbench-agent-runtime/`、模板与 `deploy.sh` 齐全；无 `.env`/`.venv`/`output/`）。
-- 全部单元测试：`203 tests, OK (skipped=48)`，与改动前基线逐条对比 **0 回归**。
+- 全部单元测试：`211 tests, OK (skipped=48)`，与改动前基线逐条对比 **0 回归**。
 - 模拟平台调用：用官方模板冒充注入基线执行 00 阶段，基线被完整移入备份目录，
   生成的 `backend/package.json` 为 `@arc/backend`，`deploy.sh` 通过 `bash -n`。
-- 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`runner-events.jsonl` 记录
-  `runner_state` / `requirement_state`，缺失图片只产生 warning。
-- **Smoke Competition 已完成一次端到端运行**（第一轮提交的代码），确认了本地无法验证的三件事：
-  模型参数被代理接受、Chromium 可在容器内安装、`deploy.sh` 能在容器内构建并启动。
+- 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`interfaces` / `tests` 表记录
+  API/页面/trigger 契约与各类测试；`runner-events.jsonl` 记录 `runner_state` / `requirement_state`，
+  缺失图片只产生 warning。
+- **Smoke Competition 已完成一次端到端运行**（第一轮提交的代码），13/13 pass 完成、
+  23/23 后端测试通过、UI 与端到端全绿；日志显示 98 次模型调用、输入 1.32M tokens
+  （其中 63% 命中缓存）、输出 186k tokens，总耗时约 34.5 分钟。第 12 阶段占 47% 时间，
+  其中大半是 E2E 反复起服务；依赖安装只额外发生 3 次、每次 8 秒（首次 42 秒），
+  Chromium 只真正安装一次——**证实跳过 M8 是合理的**。
 
 **已知限制**
 
 - 46 条 legacy 用例尚未移植到当前契约（默认跳过，`ARC_LEGACY_TESTS=1` 可运行）。
-- 尚未按需求粒度记录接口/测试明细（只写 requirement 状态）；`interface_upsert` / `test_upsert` 未接入。
+- 契约与测试明细只覆盖到"一次运行"：重跑同一任务会覆盖行而不保留历史（历史由 Git 提交承担）。
 - 依赖安装仍在 05/08/10/12 触发多次、Chromium 最多装 2 次：按当前选择**保持现状**，
   等后续练习出现真实超时再按需调整。
 - 只支持 web 任务；`cli` / `android` 会明确失败而不是给出错误结果。
@@ -130,9 +135,9 @@ uv run python scripts\package.py -o compiler.zip
 
 ## 6. 下一步
 
-1. **实测驱动调参**：先看后续练习的耗时与失败分布，再决定是否缓存依赖安装、是否减少 Chromium 安装次数。
-2. **契约可视化补全**：把 API 契约、测试用例写入 traceability 的 `interfaces` / `tests` 表。
-3. **算法改进**（见 `principle.md` 与详细分析）：把 Ω 做成带生命周期与证据的一等状态、
+1. **算法改进**（见 `principle.md` 与详细分析）：把 Ω 做成带生命周期与证据的一等状态、
    给声明式 R/W 补上"实际访问"的静态检查、实现 Reference 的 data/state 两种语义、
    用有界定点迭代替代"失败就往下走"。
-4. **移植 legacy 用例**：按整文件替换、model-owned wiring、扁平 tool call 三条契约逐组重写。
+2. **移植 legacy 用例**：按整文件替换、model-owned wiring、扁平 tool call 三条契约逐组重写。
+3. **按新日志继续调优**（需要更多样本）：独立验收的 `max_turns` 余量偏小
+   （本轮 REQ-2 用到 9/10），E2E 复用 server 可显著压缩第 12 阶段时间——两者都等更多练习数据再定。

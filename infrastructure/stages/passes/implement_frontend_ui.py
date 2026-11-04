@@ -3,7 +3,11 @@
 from pathlib import Path
 
 from infrastructure.stages.frontend.context import load_ui_context, load_ui_design
+from infrastructure.stages.frontend.ui.design import owners
 from infrastructure.stages.frontend.ui.implementation import implement_ui
+from infrastructure.stages.frontend.ui.testing import test_path
+from infrastructure.shared.project import runtime_events
+from infrastructure.shared.project.entrypoints import selected_path
 from infrastructure.shared.models.text import TextModel
 from infrastructure.utils.presentation.console import DemoConsole
 from infrastructure.utils.files import save_json
@@ -29,6 +33,14 @@ def implement_frontend_ui(input_dir: Path, arc_dir: Path, pause: bool = False,
             return report
         result = implement_ui(arc_dir, design, TextModel(), console, report, max_turns,
             images=images, requirement_contexts=contexts)
+        for page_id, entry in result["pages"].items():
+            green = entry.get("status") == "GREEN"
+            if green:
+                runtime_events.interface_implemented(page_id, selected_path(arc_dir.parent, "page", page_id))
+            page_owners = owners(design, page_id)
+            runtime_events.test_case(f"ui:{page_id}",
+                requirement_id=page_owners[0] if page_owners else tree.leaves[0], kind="ui",
+                file_path=test_path(page_id), passed=green, interface_ids=[page_id])
         print(f"UI existence TDD {result['status']}. Checks: {arc_dir / 'ui_checks.json'}", flush=True)
         return result
     except BaseException as error:

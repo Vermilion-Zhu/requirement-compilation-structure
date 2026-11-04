@@ -196,6 +196,14 @@ def design_backend_apis(arc_dir: Path, pause: bool = False, top_k: int = 6, max_
             design = updated
             save_json(arc_dir / "backend_apis.json", design)
             save_json(arc_dir / "shared_conventions.json", conventions)
+            for api_id in design["requirements"][rid]:
+                p = design["apis"][api_id]
+                signature = p.get("signature") or {}
+                runtime_events.interface(api_id,
+                    req_ids=sorted(key for key, values in design["requirements"].items() if api_id in values),
+                    kind="api",
+                    content=f"{signature.get('method', '')} {signature.get('path', '')} — "
+                        f"{p.get('description', '')}".strip(" —"))
             console.artifact("backend_apis", design, f"{label} | Accepted APIs")
     for requirement_id, entry in failures.report["tasks"].items():
         if entry["status"] == "FAILED":
