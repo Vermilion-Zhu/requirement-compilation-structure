@@ -1,5 +1,7 @@
 """Mirror step output to the terminal and an append-only workspace log."""
 
+from __future__ import annotations
+
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path

@@ -1,5 +1,7 @@
 """Deterministic UI existence suites and bounded browser/typecheck commands."""
 
+from __future__ import annotations
+
 from infrastructure.shared.agent.feedback import CheckFailure
 
 import json

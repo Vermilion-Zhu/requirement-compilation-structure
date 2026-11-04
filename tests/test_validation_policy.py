@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.stages.backend.primitives import validate_design, ObligationCoverageError
 from infrastructure.stages.database.obligations.records import normalize_inference
 from infrastructure.stages.backend.testing import require_green as backend_green
@@ -30,7 +31,7 @@ class ValidationPolicy(unittest.TestCase):
 
     def test_stage03_does_not_require_all_related_fields_to_be_classified(self):
         from test_backend_contracts import prepare_artifacts
-        stage = import_module("03_infer_db_obligations")
+        stage = import_module(PASS_MODULES["03_infer_db_obligations"])
         proposal = {"requirement": {"read": [], "write": []}, "steps": {}}
         with TemporaryDirectory() as temporary:
             arc, _, _ = prepare_artifacts(Path(temporary))

@@ -10,7 +10,7 @@ IGNORE_RULES = (
     "node_modules/", "dist/", "build/", "coverage/", "test-results/", "playwright-report/",
     "backend/data/", "*.db", "*.db-wal", "*.db-shm", "*.sqlite", "*.sqlite3",
     ".env", ".env.*", "!.env.example", "compiler.log", "model_calls.jsonl", ".arc/model_logs/",
-    "__pycache__/", ".venv/",
+    ".arc/baseline_backup/", "__pycache__/", ".venv/",
 )
 
 

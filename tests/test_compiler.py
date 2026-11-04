@@ -3,6 +3,7 @@
 from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from importlib import import_module
 from io import StringIO
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from unittest.mock import patch
 
 import main
 from infrastructure.compiler import Compiler
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.utils.presentation.logging import session_info
 
 
@@ -41,15 +43,16 @@ class CompilerPipeline(unittest.TestCase):
             compiler = Compiler(root / "input", root / "application with spaces", model_log=True, port=33042)
 
             def load(module):
-                function = next(function for name, function in PASSES if name == module)
+                key = next(name for name, path in PASS_MODULES.items() if path == module)
+                function = next(function for name, function in PASSES if name == key)
                 def execute(*arguments, **options):
                     session = session_info()
                     self.assertTrue(session['model_log'])
                     self.assertTrue(session['debug_model_io'])
-                    self.assertTrue(session['stage'].startswith('Stage ' + module[:2]))
-                    calls.append((module, arguments))
-                    self.assertEqual(options, {"port": 33042} if module.startswith("00") else {})
-                    return {"pass": module}
+                    self.assertTrue(session['stage'].startswith('Stage ' + key[:2]))
+                    calls.append((key, arguments))
+                    self.assertEqual(options, {"port": 33042} if key.startswith("00") else {})
+                    return {"pass": key}
                 return SimpleNamespace(**{function: execute})
 
             with patch('infrastructure.compiler.import_module', side_effect=load), redirect_stdout(StringIO()):
@@ -63,13 +66,13 @@ class CompilerPipeline(unittest.TestCase):
             self.assertIsNone(compiler.current_stage)
             self.assertIsNone(session_info())
             self.assertEqual(sys.argv, original_argv)
-            log = (compiler.output_dir / 'compiler.log').read_text()
+            log = (compiler.output_dir / 'compiler.log').read_text(encoding='utf-8')
             self.assertIn('Stage 00', log)
             self.assertIn('Stage 12', log)
 
     def test_failure_attempts_later_passes_and_preserves_completed_results(self):
         def load(module):
-            if module == '00_project_initialization':
+            if module == PASS_MODULES['00_project_initialization']:
                 return SimpleNamespace(project_initialization=lambda output, port: ['package.json'])
             raise ValueError('Invalid requirement JSON')
         with TemporaryDirectory() as temporary:
@@ -87,6 +90,16 @@ class CompilerPipeline(unittest.TestCase):
     def test_numbered_modules_expose_the_composed_pass_functions(self):
         for module, function in PASSES:
             self.assertTrue(callable(getattr(import_module(module), function)))
+
+    def test_the_pipeline_resolves_every_pass_inside_the_package(self):
+        """The deliverable must not depend on the numbered teaching scripts."""
+        package = Path(__file__).resolve().parents[1] / "infrastructure"
+        for key, module in PASS_MODULES.items():
+            with self.subTest(pass_name=key):
+                self.assertTrue(module.startswith("infrastructure.stages.passes."), module)
+                imported = import_module(module)
+                self.assertTrue(Path(imported.__file__).resolve().is_relative_to(package))
+        self.assertEqual(set(PASS_MODULES), {name for name, _ in PASSES})
 
     def test_real_initialization_and_requirement_pass_compose_without_models(self):
         with TemporaryDirectory() as temporary:
@@ -120,11 +133,11 @@ class CompilerPipeline(unittest.TestCase):
             with ExitStack() as stack, redirect_stdout(StringIO()):
                 models = []
                 for module, proposal in proposals.items():
-                    model = stack.enter_context(patch.object(import_module(module), 'TextModel'))
+                    model = stack.enter_context(patch.object(import_module(PASS_MODULES[module]), 'TextModel'))
                     model.return_value.generate_json.return_value = proposal
                     models.append(model)
-                install = stack.enter_context(patch.object(import_module('08_implement_backend_tdd'), 'install_dependencies'))
-                stack.enter_context(patch.object(import_module('05_implement_db'), 'verify_database_runtime',
+                install = stack.enter_context(patch.object(import_module(PASS_MODULES['08_implement_backend_tdd']), 'install_dependencies'))
+                stack.enter_context(patch.object(import_module(PASS_MODULES['05_implement_db']), 'verify_database_runtime',
                     return_value={'status': 'GREEN'}))
                 compiler.compile()
             install.assert_called_once_with(compiler.output_dir)
@@ -138,6 +151,15 @@ class CompilerPipeline(unittest.TestCase):
 
 
 class CompilerCLI(unittest.TestCase):
+    ENV_KEYS = ("ARCBENCH_OUTPUT_DIR", "ARCBENCH_PROJECT_DIR", "ARCBENCH_TASK_DIR",
+                "ARCBENCH_REQUIREMENT_DIR", "ARCBENCH_TASK_TYPE")
+
+    def setUp(self):
+        # The runner sets these; blanking them keeps the CLI tests deterministic.
+        environment = patch.dict(os.environ, {key: "" for key in self.ENV_KEYS})
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def source(self, root):
         source = root / 'input'
         source.mkdir()
@@ -170,6 +192,42 @@ class CompilerCLI(unittest.TestCase):
                 with self.subTest(arguments=arguments), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                     main.parse_args(arguments)
 
+    def test_environment_supplies_locations_only_when_flags_are_absent(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.source(root)
+            other = root / 'other'
+            other.mkdir()
+            (other / 'requirements.yaml').write_text('id: ROOT\nchildren: []\n')
+            injected = {'ARCBENCH_TASK_DIR': str(source), 'ARCBENCH_OUTPUT_DIR': str(root / 'application'),
+                'ARCBENCH_TASK_TYPE': 'web'}
+            with patch.dict(os.environ, injected):
+                self.assertEqual(main.parse_args([]).requirement_path, source.resolve())
+                self.assertEqual(main.parse_args([]).output_dir, (root / 'application').resolve())
+                explicit = main.parse_args([str(other), '-o', str(root / 'chosen')])
+                self.assertEqual(explicit.requirement_path, other.resolve())
+                self.assertEqual(explicit.output_dir, (root / 'chosen').resolve())
+            # The documented platform invocation still works with no environment at all.
+            self.assertEqual(main.parse_args([str(source), '-o', str(root / 'out')]).task_type, 'web')
+
+    def test_unsupported_task_type_fails_before_compiling(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.source(root)
+            output = root / 'output'
+            with patch.object(main, 'Compiler') as cls, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as error:
+                    main.main([str(source), '-o', str(output), '--type', 'cli'])
+                self.assertEqual(error.exception.code, 1)
+                cls.assert_not_called()
+            with patch.dict(os.environ, {'ARCBENCH_TASK_TYPE': 'android'}), \
+                    patch.object(main, 'Compiler') as cls, redirect_stderr(StringIO()):
+                with self.assertRaises(SystemExit) as error:
+                    main.main([str(source), '-o', str(output)])
+                self.assertEqual(error.exception.code, 1)
+                cls.assert_not_called()
+            self.assertFalse(output.exists())
+
     def test_port_and_short_output_option_reach_the_compiler(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -177,6 +235,7 @@ class CompilerCLI(unittest.TestCase):
             with patch.object(main, 'Compiler') as cls:
                 main.main([str(source), '-o', str(root / 'output'), '--port', '33042'])
             self.assertEqual(cls.call_args.kwargs['port'], 33042)
+            self.assertNotIn('task_type', cls.call_args.kwargs)
             for port in ('0', '-1', '65536'):
                 with self.subTest(port=port), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                     main.parse_args([str(source), '-o', str(root / 'output'), '--port', port])
@@ -199,18 +258,44 @@ class CompilerCLI(unittest.TestCase):
             self.assertFalse((root / 'output').exists())
             self.assertEqual(output_file.read_text(), 'preserve')
 
-    def test_failure_and_interrupt_exit_without_starting_another_compilation(self):
+    def test_failure_exits_nonzero_without_a_runnable_application(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = self.source(root)
-            for failure, status in [(ValueError('failed test acceptance'), 0), (KeyboardInterrupt(), 130)]:
-                with self.subTest(status=status), patch.object(main, 'Compiler') as cls, redirect_stderr(StringIO()):
-                    cls.return_value.current_stage = '08_implement_backend_tdd.py'
-                    cls.return_value.compile.side_effect = failure
-                    with self.assertRaises(SystemExit) as error:
-                        main.main([str(source), '--output-dir', str(root / 'output')])
-                    self.assertEqual(error.exception.code, status)
-                    cls.return_value.compile.assert_called_once_with()
+            with patch.object(main, 'Compiler') as cls, redirect_stderr(StringIO()):
+                cls.return_value.current_stage = '08_implement_backend_tdd.py'
+                cls.return_value.compile.side_effect = ValueError('failed test acceptance')
+                with self.assertRaises(SystemExit) as error:
+                    main.main([str(source), '--output-dir', str(root / 'output')])
+                self.assertEqual(error.exception.code, 1)
+                cls.return_value.compile.assert_called_once_with()
+
+    def test_failure_keeps_partial_results_scoreable_when_deploy_sh_exists(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.source(root)
+            output = root / 'output'
+            output.mkdir()
+            (output / 'deploy.sh').write_text('#!/usr/bin/env bash\n')
+            (output / 'package.json').write_text('{"name": "arc-application"}\n')
+            with patch.object(main, 'Compiler') as cls, redirect_stderr(StringIO()):
+                cls.return_value.compile.side_effect = ValueError('one pass failed')
+                with self.assertRaises(SystemExit) as error:
+                    main.main([str(source), '--output-dir', str(output)])
+                self.assertEqual(error.exception.code, 0)
+                cls.return_value.compile.assert_called_once_with()
+
+    def test_interrupt_exits_with_the_interrupt_status(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.source(root)
+            with patch.object(main, 'Compiler') as cls, redirect_stderr(StringIO()):
+                cls.return_value.current_stage = '08_implement_backend_tdd.py'
+                cls.return_value.compile.side_effect = KeyboardInterrupt()
+                with self.assertRaises(SystemExit) as error:
+                    main.main([str(source), '--output-dir', str(root / 'output')])
+                self.assertEqual(error.exception.code, 130)
+                cls.return_value.compile.assert_called_once_with()
 
 
 if __name__ == '__main__':

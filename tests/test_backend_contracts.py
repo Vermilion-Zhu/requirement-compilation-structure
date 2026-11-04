@@ -8,6 +8,7 @@ import unittest
 import json
 from unittest.mock import Mock, patch
 
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.shared.project.initialize import initialize_project
 from infrastructure.utils.files import save_json, save_text
 
@@ -67,7 +68,7 @@ class BackendDesign(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.output = Path(temporary.name)
         self.arc, self.schema, self.design = prepare_artifacts(self.output)
-        self.stage = import_module("06_design_backend_apis")
+        self.stage = import_module(PASS_MODULES["06_design_backend_apis"])
 
     def proposal(self, rid):
         ids = self.design["requirements"][rid]

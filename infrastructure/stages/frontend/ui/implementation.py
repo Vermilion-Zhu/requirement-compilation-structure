@@ -4,6 +4,8 @@ Tests are rendered deterministically from the complete step 09 design. A shared
 file agent implements one page at a time, with previously accepted page tests
 included in its checks. Application integration is model-owned; shared test tools remain read-only."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 

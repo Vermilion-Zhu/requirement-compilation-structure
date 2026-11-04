@@ -1,19 +1,36 @@
 """Minimal visual model client using the existing model environment variables."""
 
+from __future__ import annotations
+
 import base64
 import json
 from io import BytesIO
 import mimetypes
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 from PIL import Image, ImageOps
-from infrastructure.utils.presentation.model_io import http_client, invoke
-from infrastructure.utils.presentation.console import DemoConsole
+
 from infrastructure.shared.agent.proposals import propose_json
-from infrastructure.shared.models.text import JSON_OUTPUT_RULE, reasoning_arguments, reasoning_rejected
+from infrastructure.shared.models.configuration import (
+    DEFAULT_TIMEOUT_SECONDS,
+    DEFAULT_TRANSPORT_RETRIES,
+    base_url,
+    first_credential,
+    load_environment,
+    model_identifier,
+    reasoning_mode,
+)
+from infrastructure.shared.models.text import (
+    JSON_OUTPUT_RULE,
+    PROMPT_ONLY_RULE,
+    parse_json_object,
+    reasoning_arguments,
+    reasoning_rejected,
+    response_format_unavailable,
+)
+from infrastructure.utils.presentation.console import DemoConsole
+from infrastructure.utils.presentation.model_io import http_client, invoke
 
 
 VISION_INSTRUCTIONS = """Describe the supplied UI reference using visible evidence only.
@@ -26,6 +43,7 @@ business behavior, APIs, database fields or interactions from appearance alone.
 """
 
 VISUAL_REPAIR_PREFIX = "Correct the previous response:\n"
+
 
 def compress_image(data: bytes, mime: str) -> tuple[bytes, str]:
     """Resize static references to 2048px and encode JPEG, retaining smaller originals."""
@@ -50,18 +68,23 @@ def compress_image(data: bytes, mime: str) -> tuple[bytes, str]:
 class VisualModel:
     """Extract visible image evidence without inferring hidden business behavior."""
     def __init__(self) -> None:
-        """Read compiler/.env and configure the image-capable model, falling back to text-model settings."""
-        load_dotenv(Path(__file__).resolve().parents[3] / ".env", encoding="utf-8-sig")
-        self.name = os.getenv("VISUAL_MODEL") or os.getenv("MODEL")
-        api_key = os.getenv("VISUAL_API_KEY") or os.getenv("OPENAI_API_KEY")
-        base_url = os.getenv("VISUAL_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-        if not self.name or not api_key:
-            raise ValueError("Set MODEL and OPENAI_API_KEY in compiler/.env; the model must accept images")
-        self.reasoning = os.getenv("VISUAL_REASONING", os.getenv("MODEL_REASONING", "low")).lower()
-        if self.reasoning not in {"auto", "provider", "none", "low", "high", "max"}:
-            raise ValueError("VISUAL_REASONING must be auto, provider, none, low, high or max")
+        """Read the run environment and configure the image-capable model.
+
+        Visual settings fall back to the main model settings, and a local ``.env``
+        is read only when ARC-Bench did not inject its own connection.
+        """
+        load_environment(Path(__file__).resolve().parents[3] / ".env")
+        self.name = model_identifier("VISUAL_MODEL", "MODEL")
+        api_key = first_credential("VISUAL_API_KEY", "OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("Set OPENAI_API_KEY, which ARC-Bench injects; the model must accept images")
+        self.reasoning = reasoning_mode("VISUAL_REASONING", "MODEL_REASONING")
         self._reasoning_supported = True
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=600, max_retries=2, http_client=http_client())
+        self._response_format = "json_object"
+        self.client = OpenAI(api_key=api_key,
+            base_url=base_url("VISUAL_BASE_URL", "OPENAI_BASE_URL"),
+            timeout=DEFAULT_TIMEOUT_SECONDS, max_retries=DEFAULT_TRANSPORT_RETRIES,
+            http_client=http_client())
 
     def analyze(self, image: Path, max_attempts: int = 10) -> dict:
         """Send one supported reference image and parse the returned layout, elements, and style evidence."""
@@ -76,33 +99,45 @@ class VisualModel:
             lambda value: value, DemoConsole(), f"Visual analysis {image.name}", max_attempts)
         return result
 
-    def generate_json(self, instructions: str, payload: dict) -> dict:
-        """Request visual JSON and include prior response errors when repairing it."""
+    def _protocol_text(self, instructions: str, payload: dict) -> str:
+        """Compose the prompt with the JSON rule matching the negotiated format."""
         text = instructions.rstrip() + "\n" + JSON_OUTPUT_RULE
+        if getattr(self, "_response_format", "json_object") != "json_object":
+            text += PROMPT_ONLY_RULE
         if "correction" in payload:
             text += "\n" + VISUAL_REPAIR_PREFIX + json.dumps(payload["correction"], ensure_ascii=False)
+        return text
+
+    def generate_json(self, instructions: str, payload: dict) -> dict:
+        """Request visual JSON and include prior response errors when repairing it."""
         mode = getattr(self, "reasoning", "low")
-        arguments = {
+        while True:
+            options = {
                 "model": self.name,
                 "messages": [{"role": "user", "content": [
-                    {"type": "text", "text": text},
+                    {"type": "text", "text": self._protocol_text(instructions, payload)},
                     {"type": "image_url", "image_url": {"url": payload["image_url"], "detail": "high"}},
                 ]}],
-                "response_format": {"type": "json_object"},
             }
-        try:
-            while True:
-                controls = reasoning_arguments(self.name, mode) if getattr(self, "_reasoning_supported", True) else {}
-                try:
-                    response = invoke(self.client, {**arguments, **controls})
-                    break
-                except OpenAIError as error:
-                    if not getattr(self, "_reasoning_supported", True) or not reasoning_rejected(error):
-                        raise
+            if getattr(self, "_response_format", "json_object") == "json_object":
+                options["response_format"] = {"type": "json_object"}
+            if getattr(self, "_reasoning_supported", True):
+                options.update(reasoning_arguments(self.name, mode))
+            try:
+                response = invoke(self.client, options)
+                break
+            except OpenAIError as error:
+                if (getattr(self, "_response_format", "json_object") == "json_object"
+                        and response_format_unavailable(error)):
+                    self._response_format = "prompt_only"
+                    print("Provider rejected response_format=json_object; "
+                        "requesting JSON through the prompt only.", flush=True)
+                    continue
+                if getattr(self, "_reasoning_supported", True) and reasoning_rejected(error):
                     self._reasoning_supported = False
                     print("Provider rejected reasoning controls; using provider defaults.", flush=True)
-        except OpenAIError as error:
-            raise RuntimeError(f"Visual model request failed: {error}") from error
+                    continue
+                raise RuntimeError(f"Visual model request failed: {error}") from error
         if not response.choices or not response.choices[0].message.content:
             raise ValueError("Visual model returned empty content")
-        return json.loads(response.choices[0].message.content)
+        return parse_json_object(response.choices[0].message.content)

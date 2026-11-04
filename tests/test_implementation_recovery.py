@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from infrastructure.compiler import Compiler
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.shared.agent.tools import FileTools
 from infrastructure.shared.agent.loop import AgentExhausted, run_file_agent
 from infrastructure.shared.agent.recovery import implementation_task, final_checks
@@ -106,10 +107,11 @@ class ImplementationRecovery(unittest.TestCase):
         from test_compiler import PASSES
         calls = []
         def load(module):
-            function = next(function for name, function in PASSES if name == module)
+            stage = next(key for key, path in PASS_MODULES.items() if path == module)
+            function = next(function for name, function in PASSES if name == stage)
             def execute(*args, **kwargs):
-                calls.append(module)
-                return {'status': 'COMPLETED_WITH_FAILURES', 'failures': [{'task': 'API-A', 'status': 'FAILED'}]} if module.startswith('08') else {'status': 'GREEN'}
+                calls.append(stage)
+                return {'status': 'COMPLETED_WITH_FAILURES', 'failures': [{'task': 'API-A', 'status': 'FAILED'}]} if stage.startswith('08') else {'status': 'GREEN'}
             return SimpleNamespace(**{function: execute})
         with TemporaryDirectory() as temporary:
             compiler = Compiler(Path(temporary) / 'input', Path(temporary) / 'output')
@@ -176,7 +178,7 @@ class ImplementationRecovery(unittest.TestCase):
 
     def test_backend_test_generation_exhaustion_does_not_skip_later_apis(self):
         from test_backend_contracts import prepare_artifacts
-        stage = import_module('08_implement_backend_tdd')
+        stage = import_module(PASS_MODULES['08_implement_backend_tdd'])
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             arc, _, contracts = prepare_artifacts(root)

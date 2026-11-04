@@ -1,9 +1,12 @@
 """Run the complete requirement compiler in one process using the existing passes."""
 
+from __future__ import annotations
+
 from importlib import import_module
 from pathlib import Path
 import traceback
 
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.utils.presentation.console import show_panel
 from infrastructure.utils.presentation.logging import console_log
 from infrastructure.utils.files import save_json
@@ -26,12 +29,16 @@ class Compiler:
         self.report = {"status": "NOT_STARTED", "stages": {}}
 
     def _run(self, module: str, function: str, *arguments, **options):
-        """Attempt every pass; keep failures explicit without aborting later passes."""
+        """Attempt every pass; keep failures explicit without aborting later passes.
+
+        ``module`` stays the historical pass label so reports, logs and stage
+        numbers do not change; the import target comes from the pass registry.
+        """
         self.current_stage = module + ".py"
         try:
             with console_log(self.output_dir, stage=self.current_stage,
                     model_log=self.model_log, debug_model_io=self.model_log):
-                result = getattr(import_module(module), function)(*arguments, **options)
+                result = getattr(import_module(PASS_MODULES[module]), function)(*arguments, **options)
         except KeyboardInterrupt as error:
             self.report["status"] = "INTERRUPTED"
             self.report["stages"][module] = {"status": "INTERRUPTED", "error": str(error)}

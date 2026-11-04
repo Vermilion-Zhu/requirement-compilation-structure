@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.shared.agent.tasks import StageIncomplete
 from infrastructure.shared.project.initialize import initialize_project
 from infrastructure.shared.agent.tools import FileTools
@@ -86,7 +87,7 @@ class DatabaseRepairProtocol(unittest.TestCase):
             self.assertFalse(ordinary.state()[path]['writable'])
 
     def test_missing_sql_can_be_created_after_real_failure_and_marked_recovered(self):
-        stage = import_module('05_implement_db')
+        stage = import_module(PASS_MODULES['05_implement_db'])
         with TemporaryDirectory() as temporary, redirect_stdout(StringIO()):
             output = Path(temporary)
             arc = prepare(output)
@@ -185,7 +186,7 @@ class RealDatabaseRuntime(unittest.TestCase):
             self.assertEqual(report['status'], 'GREEN')
 
     def test_stage_fails_honestly_after_repair_exhaustion(self):
-        stage = import_module('05_implement_db')
+        stage = import_module(PASS_MODULES['05_implement_db'])
         with TemporaryDirectory() as directory, redirect_stdout(StringIO()):
             output, arc = self.workspace(directory)
             def response(instructions, payload):
@@ -200,7 +201,7 @@ class RealDatabaseRuntime(unittest.TestCase):
             self.assertFalse((output / 'backend/data/app.db').exists())
 
     def test_runtime_repair_recovers_a_failed_generation_and_its_missing_wiring(self):
-        stage = import_module('05_implement_db')
+        stage = import_module(PASS_MODULES['05_implement_db'])
         with TemporaryDirectory() as directory, redirect_stdout(StringIO()):
             output, arc = self.workspace(directory)
             path = 'backend/src/db/tables/Note.sql'

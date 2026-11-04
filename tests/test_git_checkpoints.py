@@ -113,12 +113,14 @@ class GitCheckpoints(unittest.TestCase):
     def test_pipeline_commits_each_pass_and_final_partial_report(self):
         with TemporaryDirectory() as temporary, redirect_stdout(StringIO()):
             from test_compiler import PASSES
+            from infrastructure.stages.passes import PASS_MODULES
             root = Path(temporary)
             compiler = Compiler(root / 'input', root / 'output')
             def load(module):
-                name = next(function for stage, function in PASSES if stage == module)
+                stage = next(key for key, path in PASS_MODULES.items() if path == module)
+                name = next(function for key, function in PASSES if key == stage)
                 def execute(*args, **kwargs):
-                    if module.startswith('03'):
+                    if stage.startswith('03'):
                         raise ValueError('Missing obligation')
                     return {'status': 'GREEN'}
                 return SimpleNamespace(**{name: execute})

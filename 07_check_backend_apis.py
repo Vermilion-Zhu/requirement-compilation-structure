@@ -1,20 +1,10 @@
 """Step 07: display complete backend API definitions and requirement associations."""
 
 from contextlib import ExitStack
-import json
-from pathlib import Path
+from infrastructure.stages.passes.check_backend_apis import check_backend_apis
 
 from infrastructure.utils.cli import create_parser, resolve_directories
-from infrastructure.utils.files import read_artifact
-from infrastructure.utils.presentation.console import DemoConsole
 from infrastructure.utils.presentation.logging import console_log
-
-
-def check_backend_apis(arc_dir: Path, pause: bool = False) -> dict:
-    """Read and print the API artifact without changing it or validating its design."""
-    design = read_artifact(arc_dir, "backend_apis.json")
-    DemoConsole(pause).show("Step 07 | Backend API design", json.dumps(design, ensure_ascii=False, indent=2))
-    return design
 
 
 def main() -> None:

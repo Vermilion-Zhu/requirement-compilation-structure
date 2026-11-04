@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.stages.database.schema import apply_patch, check_related_fields
 from infrastructure.utils.files import save_json
 
@@ -49,8 +50,8 @@ class SchemaEvolution(unittest.TestCase):
                 check_related_fields(updated, [missing])
 
     def test_bad_stage02_proposal_is_repaired_before_next_requirement_and_stage03(self):
-        stage2 = import_module('02_build_db_schema')
-        stage3 = import_module('03_infer_db_obligations')
+        stage2 = import_module(PASS_MODULES['02_build_db_schema'])
+        stage3 = import_module(PASS_MODULES['03_infer_db_obligations'])
         bad, fixed = self.proposals()
         with TemporaryDirectory() as temporary:
             arc = Path(temporary)
@@ -83,7 +84,7 @@ class SchemaEvolution(unittest.TestCase):
             self.assertEqual(result['requirements']['REQ-1']['read'], ['Session.id'])
 
     def test_legacy_invalid_artifact_has_clear_error_before_model_request(self):
-        stage3 = import_module('03_infer_db_obligations')
+        stage3 = import_module(PASS_MODULES['03_infer_db_obligations'])
         with TemporaryDirectory() as temporary:
             arc = Path(temporary)
             save_json(arc / 'requirements.json', {'id': 'ROOT', 'children': [{'id': 'REQ-1', 'name': 'Home'}]})

@@ -1,5 +1,7 @@
 """Task-specific destinations without embedding them in individual file tools."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 

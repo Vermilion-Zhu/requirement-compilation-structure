@@ -1,6 +1,18 @@
-"""Compile a requirement directory into an executable application."""
+"""Compile a requirement directory into an executable application.
+
+ARC-Bench launches this entrypoint as::
+
+    python3 /workspace/submission/main.py <requirements-directory> --output-dir <app-root>
+
+The runner also exposes the same locations and the task type as ``ARCBENCH_*``
+environment variables. Command-line arguments win; the environment only supplies
+defaults, so the documented invocation keeps working unchanged.
+"""
+
+from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import sys
 
@@ -9,19 +21,52 @@ from infrastructure.utils.cli import resolve_directories
 from infrastructure.utils.presentation.logging import configure_console
 
 
+SUPPORTED_TASK_TYPES = {"web"}
+
+
+def _first_env(*names: str) -> str | None:
+    """Return the first non-empty environment value, so one location has one source."""
+    for name in names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return None
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Read public options and validate paths and the backend port before compilation."""
+    """Read public options and validate paths, port and task type before compilation."""
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    parser.add_argument("requirement_path", type=Path,
-        help="Requirement directory containing requirements.yaml and reference assets")
-    parser.add_argument("-o", "--output-dir", type=Path, required=True,
-        help="Directory for the generated application and .arc artifacts")
+    parser.add_argument("requirement_path", type=Path, nargs="?",
+        default=None,
+        help="Requirement directory containing requirements.yaml and reference assets "
+             "(default: $ARCBENCH_TASK_DIR)")
+    parser.add_argument("-o", "--output-dir", type=Path, default=None,
+        help="Directory for the generated application and .arc artifacts "
+             "(default: $ARCBENCH_OUTPUT_DIR)")
     parser.add_argument("--model-log", "--debug-model-io", dest="model_log", action="store_true",
         help="Show detailed model I/O and save per-call prompt/response logs; usage and timing are always shown")
     parser.add_argument("--port", type=int, default=3000,
         help="Default generated backend port and frontend API proxy target (default: 3000)")
+    parser.add_argument("--type", dest="task_type",
+        default=os.environ.get("ARCBENCH_TASK_TYPE", "").strip() or "web",
+        help="ARC-Bench task type; only 'web' is implemented (default: $ARCBENCH_TASK_TYPE or web)")
     args = parser.parse_args(argv)
+
+    # The runner may supply locations only through the environment.
+    if args.requirement_path is None:
+        fallback = _first_env("ARCBENCH_TASK_DIR", "ARCBENCH_REQUIREMENT_DIR")
+        if fallback:
+            args.requirement_path = Path(fallback)
+    if args.output_dir is None:
+        fallback = _first_env("ARCBENCH_OUTPUT_DIR", "ARCBENCH_PROJECT_DIR")
+        if fallback:
+            args.output_dir = Path(fallback)
+
     try:
+        if args.requirement_path is None:
+            raise ValueError("a requirements directory is required")
+        if args.output_dir is None:
+            raise ValueError("--output-dir is required (or set ARCBENCH_OUTPUT_DIR)")
         if not 1 <= args.port <= 65535:
             raise ValueError("--port must be between 1 and 65535")
         args.requirement_path, args.output_dir = resolve_directories(
@@ -37,9 +82,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def has_runnable_application(output_dir: Path) -> bool:
+    """Report whether the runner can build and start something from the output."""
+    return (output_dir / "deploy.sh").is_file() and (output_dir / "package.json").is_file()
+
+
 def main(argv: list[str] | None = None) -> None:
     configure_console()
     args = parse_args(argv)
+    if args.task_type not in SUPPORTED_TASK_TYPES:
+        print(f"Unsupported ARC-Bench task type: {args.task_type!r}. "
+            f"This agent implements Web tasks ({', '.join(sorted(SUPPORTED_TASK_TYPES))}) only.",
+            file=sys.stderr)
+        raise SystemExit(1)
     compiler = Compiler(args.requirement_path, args.output_dir, model_log=args.model_log, port=args.port)
     try:
         compiler.compile()
@@ -47,8 +102,10 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Compilation interrupted at {compiler.current_stage or 'startup'}.", file=sys.stderr)
         raise SystemExit(130)
     except Exception as error:
+        # Keep a partially built application scoreable, but never report success
+        # when the runner has nothing it can start.
         print(f"Compilation failed at {compiler.current_stage or 'startup'}: {error}", file=sys.stderr)
-        raise SystemExit(0)
+        raise SystemExit(0 if has_runnable_application(args.output_dir) else 1)
     if compiler.report["status"] == "COMPLETED_WITH_FAILURES":
         print(f"All passes completed. Report: {compiler.arc_dir / 'compilation.json'}", file=sys.stderr)
         raise SystemExit(0)

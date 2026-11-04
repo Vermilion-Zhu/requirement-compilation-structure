@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from infrastructure.compiler import Compiler
+from infrastructure.stages.passes import PASS_MODULES
 
 
 class PipelineContinuation(unittest.TestCase):
@@ -27,15 +28,15 @@ class PipelineContinuation(unittest.TestCase):
                 calls.append(rid)
                 return {} if rid == 'BAD' else {'entities': {}, 'related_fields': []}
             with ExitStack() as stack, redirect_stdout(StringIO()), redirect_stderr(StringIO()):
-                stack.enter_context(patch.object(import_module('02_build_db_schema'), 'TextModel',
+                stack.enter_context(patch.object(import_module(PASS_MODULES['02_build_db_schema']), 'TextModel',
                     return_value=Mock(generate_json=schema_proposal)))
-                stack.enter_context(patch.object(import_module('03_infer_db_obligations'), 'TextModel',
+                stack.enter_context(patch.object(import_module(PASS_MODULES['03_infer_db_obligations']), 'TextModel',
                     return_value=Mock(generate_json=Mock(return_value={
                         'requirement': {'read': [], 'write': []}, 'steps': {}}))))
-                stack.enter_context(patch.object(import_module('09_design_ui'), 'TextModel',
+                stack.enter_context(patch.object(import_module(PASS_MODULES['09_design_ui']), 'TextModel',
                     return_value=Mock(generate_json=Mock(return_value={
                         'pages': {}, 'elements': {}, 'bindings': {}, 'requirement_ui': [], 'step_ui': {}}))))
-                stack.enter_context(patch.object(import_module('05_implement_db'), 'verify_database_runtime',
+                stack.enter_context(patch.object(import_module(PASS_MODULES['05_implement_db']), 'verify_database_runtime',
                     return_value={'status': 'GREEN'}))
                 compiler.compile()
             self.assertEqual(calls, ['BAD'] * 10 + ['GOOD'])

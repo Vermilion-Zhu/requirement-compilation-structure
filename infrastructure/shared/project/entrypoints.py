@@ -1,5 +1,7 @@
 """Implementation source paths, stable exports and portable imports."""
 
+from __future__ import annotations
+
 import posixpath
 from pathlib import Path, PurePosixPath
 import json

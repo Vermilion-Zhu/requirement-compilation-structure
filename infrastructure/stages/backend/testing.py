@@ -1,5 +1,7 @@
 """Execute actual backend compilation and tests without source/title policy gates."""
 
+from __future__ import annotations
+
 from infrastructure.shared.agent.feedback import CheckFailure
 
 import json

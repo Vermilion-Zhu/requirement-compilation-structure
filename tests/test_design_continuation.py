@@ -6,6 +6,7 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 
+from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.shared.agent.tasks import StageIncomplete
 from infrastructure.utils.files import save_json
 from test_schema_evolution import field
@@ -14,8 +15,8 @@ from tool_fixtures import propose_files
 
 class DesignContinuation(unittest.TestCase):
     def test_schema_failure_does_not_stop_later_requirement_or_obligation_inference(self):
-        schema_stage = import_module('02_build_db_schema')
-        obligation_stage = import_module('03_infer_db_obligations')
+        schema_stage = import_module(PASS_MODULES['02_build_db_schema'])
+        obligation_stage = import_module(PASS_MODULES['03_infer_db_obligations'])
         with TemporaryDirectory() as directory:
             arc = Path(directory) / '.arc'
             save_json(arc / 'requirements.json', {'id': 'ROOT', 'children': [
@@ -48,7 +49,7 @@ class DesignContinuation(unittest.TestCase):
 
     def test_api_design_failure_preserves_later_valid_contracts(self):
         from test_backend_contracts import prepare_artifacts, conditions
-        stage = import_module('06_design_backend_apis')
+        stage = import_module(PASS_MODULES['06_design_backend_apis'])
         with TemporaryDirectory() as directory:
             arc, _, design = prepare_artifacts(Path(directory))
             calls = []
@@ -71,7 +72,7 @@ class DesignContinuation(unittest.TestCase):
 
     def test_sql_failure_still_wires_the_other_successful_table(self):
         from test_backend_contracts import prepare_artifacts
-        stage = import_module('05_implement_db')
+        stage = import_module(PASS_MODULES['05_implement_db'])
         with TemporaryDirectory() as directory:
             output = Path(directory)
             arc, schema, _ = prepare_artifacts(output)
