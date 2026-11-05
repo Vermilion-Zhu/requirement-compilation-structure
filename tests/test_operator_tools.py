@@ -121,16 +121,20 @@ class ReusedE2EServers(unittest.TestCase):
             config = (output / CONFIG).read_text(encoding="utf-8")
             self.assertEqual(config.count("reuseExistingServer: reuse"), 2)
             runner = (output / RUNNER).read_text(encoding="utf-8")
-            for marker in ("ARC_E2E_REUSE_BACKEND", "ARC_E2E_REUSE_FRONTEND",
-                    "falling back to per-run servers", "backendFingerprint",
+            for marker in ("ARC_E2E_REUSE_BACKEND", "ARC_E2E_REUSE_FRONTEND", "backendFingerprint",
                     "child.exitCode !== null", "cached.disabled", "binary not found at"):
                 self.assertIn(marker, runner)
-            # stdout is reserved for the Playwright JSON reporter: a status banner
-            # printed there makes the harness unable to parse the report.
-            self.assertNotIn("console.log(", runner)
-            self.assertIn("process.stderr.write(\"[e2e] \"", runner)
-            self.assertIn("report(\"reusing servers", runner)
-            self.assertIn("report(\"per-run servers", runner)
+            # The runner is silent: stdout is the Playwright JSON reporter and even
+            # stderr noise is unwanted, so execution mode is recorded on disk.
+            for marker in ("console.log(", "console.error(", "process.stderr.write", "process.stdout.write"):
+                self.assertNotIn(marker, runner)
+            self.assertIn("e2e-runs.jsonl", runner)
+            self.assertIn("recordRun(", runner)
+            self.assertIn("own_backend", runner)
+            # The fixture ignores StrictMode effect cleanup aborts instead of
+            # reporting them as application network errors.
+            fixture = (output / FIXTURE).read_text(encoding="utf-8")
+            self.assertIn("ERR_ABORTED", fixture)
             # The detached Vite start must resolve the hoisted binary exactly like the
             # Playwright command does; using "node_modules/..." from frontend/ (the cwd)
             # failed for every spec in the first reused-server run.

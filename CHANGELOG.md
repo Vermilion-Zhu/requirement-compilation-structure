@@ -59,7 +59,7 @@
 | --- | --- | --- |
 | **读取权限** | 日志里有 10 次 `This task cannot read this file`，全部发生在第 12 阶段的独立验收生成/复核，白耗了修复轮次 | 验收任务的只读白名单补上编译器自有基础设施与元数据（三个 `package.json`、`db/initialize.ts`、`db/client.ts`、`playwright.e2e.config.ts`、`vite.e2e.config.ts`）；错误信息改为列出"本次可读文件"并明确"应用源码不可读，请改用任务证据"；验收提示词同步说明，避免反复重试 |
 | **轮次预算** | 冒烟中 REQ-2 的独立验收用到 9/10 轮，接近耗尽 | 所有 agent 循环的 `max_turns` 默认值 10 → **20**（05 数据库修复、08 后端 TDD、10 UI TDD、12 触发器/验收），CLI 默认值同步；按"优先保证正确率"的要求，接受最坏情况下更长 |
-| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（两处缺陷已修：Vite 相对路径写错导致复用从未启动；复用成功后又因 runner 往 stdout 打状态行污染了 Playwright 的 JSON 报告，现状态统一走 stderr 且解析器可容忍前缀） |
+| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
 ### 2.4 第四轮：D1 — Obligation 账本
@@ -134,6 +134,7 @@ uv run python scripts\package.py -o compiler.zip
 - 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`interfaces` / `tests` 表记录
   API/页面/trigger 契约与各类测试；`runner-events.jsonl` 记录 `runner_state` / `requirement_state`，
   缺失图片只产生 warning。
+- **E2E 复用已用真实产物本地复现验证**：冷启动 4.27 s → 复用 3.05 s（同一条 spec、同为 2 passed），强制回退 5.03 s，三次输出均可解析且无任何 [e2e] 行。
 - **义务账本在真实产物上自洽**：用仓库内 `output/demo/.arc` 实跑得到 59 条义务 / 3 个需求，
   全部 `Implemented`、`resolved=true`（该目录缺少 trigger 产物，因此只有 `api` 分配者）。
 - **两次正式任务运行已对比**（同一任务，11 需求 / 8 API / 9 页面）：第一版 4795 s、外部测试 3/12；

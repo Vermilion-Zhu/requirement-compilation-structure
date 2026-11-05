@@ -151,8 +151,7 @@ def analyze_text(text: str, top: int = 10) -> dict:
         if line.startswith("Analyzing image"):
             images += 1
             continue
-        for marker in ("[INPUT WARNING]", "[GIT WARNING]", "[RUNTIME]", "[BASELINE]", "[CHECK] failed",
-                "[e2e] reusing servers", "[e2e] per-run servers", "[e2e] server reuse unavailable"):
+        for marker in ("[INPUT WARNING]", "[GIT WARNING]", "[RUNTIME]", "[BASELINE]", "[CHECK] failed"):
             if marker in line:
                 warnings[marker] += 1
         smoke = FINAL_SMOKE.search(line)

@@ -57,7 +57,7 @@ RUNNER_SOURCE = '''// One server pair per application, reused by later E2E invoc
 // environment costs one attempt instead of one per spec.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -132,6 +132,7 @@ async function freePort() {
   return port;
 }
 function startDetached(role, argv, cwd, env) {
+  mkdirSync(join(root, ".arc"), { recursive: true });
   const log = openSync(logPath(role), "a");
   const child = spawn(process.execPath, argv, { cwd, detached: true, stdio: ["ignore", log, log], env: { ...process.env, ...env } });
   closeSync(log);
@@ -151,11 +152,16 @@ function stop(pid) {
   try { process.kill(pid); } catch { /* already gone */ }
 }
 const temporary = () => mkdtempSync(join(process.env.ARC_E2E_TEMP_ROOT ?? tmpdir(), "arc-e2e-"));
-// stdout belongs to the Playwright JSON reporter; status goes to stderr so the
-// compiler can keep parsing stdout as one JSON document.
-function report(message) {
-  process.stderr.write("[e2e] " + message + "\n");
+// The harness parses this process's stdout as one Playwright JSON document, so the
+// runner prints nothing at all: execution mode is recorded on disk instead.
+function recordRun(payload) {
+  try {
+    mkdirSync(join(root, ".arc"), { recursive: true });
+    appendFileSync(runLogPath, JSON.stringify({ timestamp: new Date().toISOString(), ...payload }) + String.fromCharCode(10));
+  } catch { /* diagnostics must never fail the run */ }
 }
+const runLogPath = join(root, ".arc", "e2e-runs.jsonl");
+const ports = state => ({ backend_port: state.backend_port, frontend_port: state.frontend_port });
 const backendUrl = port => `http://127.0.0.1:${port}/api/health`;
 const frontendUrl = port => `http://127.0.0.1:${port}/`;
 
@@ -174,12 +180,18 @@ async function prepare(cached) {
 
   let directory = cached?.directory;
   let database = cached?.database;
+  let started_backend = false;
+  let started_frontend = false;
+  try {
   if (!reuse_backend) {
     stop(pids.backend);
     pids.backend = undefined;
     if (await healthy(backendUrl(backendPort))) await waitUntilDown(backendUrl(backendPort), 5000);
-    if (!directory) directory = temporary();
-    if (!database || !existsSync(database)) database = join(directory, "app.db");
+    // A previous invocation temp root is removed by the Python harness, so a
+    // restarted backend always gets a database directory that exists now.
+    directory = temporary();
+    database = join(directory, "app.db");
+    started_backend = true;
     pids.backend = await startServer("backend",
       ["--import", "tsx", "backend/src/server.ts"], root,
       { PORT: String(backendPort), DATABASE_URL: database },
@@ -189,14 +201,21 @@ async function prepare(cached) {
     stop(pids.frontend);
     pids.frontend = undefined;
     if (await healthy(frontendUrl(frontendPort))) await waitUntilDown(frontendUrl(frontendPort), 5000);
+    started_frontend = true;
     pids.frontend = await startServer("frontend",
       [VITE_BINARY, "--config", "vite.e2e.config.ts", "--host", "127.0.0.1",
         "--port", String(frontendPort), "--strictPort"], join(root, "frontend"),
       { ARC_BACKEND_URL: `http://127.0.0.1:${backendPort}` },
       frontendUrl(frontendPort), join(root, "node_modules/vite/bin/vite.js"));
   }
+  } catch (error) {
+    if (started_backend) stop(pids.backend);
+    if (started_frontend) stop(pids.frontend);
+    throw error;
+  }
   const state = { backend_port: backendPort, frontend_port: frontendPort, database, directory,
-    hash: fingerprint, pids, reuse_backend: true, reuse_frontend: true };
+    hash: fingerprint, pids, reuse_backend: true, reuse_frontend: true,
+    own_backend: started_backend, reused: { backend: !started_backend, frontend: !started_frontend } };
   writeState(state);
   return state;
 }
@@ -237,22 +256,31 @@ function playwright(state) {
 
 const cached = readState();
 let state;
+let ownedBackend = null;
 if (cached && cached.disabled) {
   state = await freshState();
-  report("per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+  recordRun({ mode: "per-run", reason: "reuse disabled earlier", ...ports(state) });
 } else {
   try {
     state = await prepare(cached);
-    report("reusing servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+    ownedBackend = state.own_backend ? state.pids.backend : null;
+    recordRun({ mode: "reuse", reused_backend: state.reused.backend,
+      reused_frontend: state.reused.frontend, ...ports(state) });
   } catch (error) {
     const reason = error && error.message ? error.message : String(error);
-    report("server reuse unavailable, falling back to per-run servers: " + reason);
-    writeState({ disabled: true, reason });
     state = await freshState();
-    report("per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+    recordRun({ mode: "per-run", reason, ...ports(state) });
+    writeState({ disabled: true, reason });
   }
 }
-process.exitCode = await playwright(state);
+try {
+  process.exitCode = await playwright(state);
+} finally {
+  // Playwright only stops servers it started itself; release the one we own so
+  // the temporary database is not left locked (Windows) or deleted underneath a
+  // live connection (Linux).
+  if (ownedBackend) stop(ownedBackend);
+}
 '''
 
 FIXTURE_SOURCE = '''// Compiler-owned Given/observation fixture. When actions go through the browser.
@@ -285,6 +313,11 @@ export const test = base.extend<{ database: Database.Database; applicationErrors
     const errors: string[] = [];
     page.on("pageerror", error => errors.push("E2E_RUNTIME_ERROR: " + error.message));
     page.on("requestfailed", request => {
+      // React StrictMode mounts, unmounts and remounts effects in development, so
+      // the first fetch is aborted by the component cleanup. An aborted request is
+      // not an application defect and must not fail every spec that loads data.
+      const failure = request.failure();
+      if (failure && failure.errorText.includes("ERR_ABORTED")) return;
       if (new URL(request.url()).pathname.startsWith("/api/")) errors.push("E2E_NETWORK_ERROR: " + request.url());
     });
     await use();
