@@ -6,7 +6,7 @@ components. Prompts and design records live in ui/design.py."""
 
 import json
 
-from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, UIResponseError, data_symbols, semantic_issues
+from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, shell_context, UIResponseError, data_symbols, semantic_issues
 from infrastructure.stages.frontend.ui.proposals import INSTRUCTIONS as EXAMPLE_INSTRUCTIONS
 from infrastructure.shared.rag.pages import PageRetriever
 from infrastructure.utils.files import save_json
@@ -70,6 +70,7 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
                 "requirement": requirement, "retrieved_pages": retrieved["pages"],
                 "all_pages": {pid: {key: page[key] for key in ("name", "route", "root", "images")}
                     for pid, page in design["pages"].items() if pid in retrieved["pages"]},
+                "shell": shell_context(design),
             }
             def accept(proposal):
                 try:
@@ -93,6 +94,8 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
     for node in design["elements"].values():
         roles[node["role"]] = roles.get(node["role"], 0) + 1
     print("UI semantics: " + ", ".join(f"{role}={count}" for role, count in sorted(roles.items())), flush=True)
+    shell = shell_context(design)
+    print(f"UI shell: {len(shell['elements'])} global elements, roots={shell['roots']}", flush=True)
     issues = semantic_issues(design)
     if issues:
         print("UI semantics warnings:" + chr(10) + "  "

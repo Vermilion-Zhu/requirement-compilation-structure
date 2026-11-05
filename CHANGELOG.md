@@ -62,6 +62,12 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
+### 2.6 第六轮：全局壳（Application Shell）
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **壳被当成某一页的内容** | 产物把 `UI-header` 挂在 `UI-home` 下，导致导航只出现在部分页面；外部 `go('Books')` 要求每页都有 `navigation` 地与 `Books` 链接，9/12 用例在第一步超时。根因是设计逐需求进行、缺少应用级视图 | 元素新增 `scope`（`global`/`page`）：壳元素 `parent=null`、跨需求复用、子元素继承 global、页面不得复制主导航；设计提示词新增 `APPLICATION SHELL` 段，请求始终附带当前壳；`page_context` 把壳放在独立的 `shell` 键（页面子树不再包含壳）；实现提示词要求 `task.page.shell` 在应用入口渲染一次并包裹所有路由；`semantic_issues` 报告"global 元素嵌进页面""多页面无壳" |
+
 ### 2.5 第五轮：给 UI 设计 IR 增加可访问性语义
 
 | 项 | 问题 | 改动 |
@@ -76,7 +82,7 @@
 | **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
 | **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
 
-测试现状：`248 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`266 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -98,6 +104,7 @@
 | 可视化 | `ARCBENCH_RUNNER_EVENTS_PATH` 的 JSONL 与 `ARCBENCH_TRACEABILITY_DIR` 的 7 张表由 `runtime_events` 写入 |
 | 义务账本 | `.arc/obligations.json` 汇总每条数据义务的归属、分配者、生命周期状态与验收证据，摘要写入 `compilation.json` |
 | 语义契约 | `ui_design.json` 的每个元素声明 `role`（必填）与 `name`（可访问名不同于可见文字时才声明）；实现阶段按 role 渲染，设计结束时打印 role 分布与冲突告警 |
+| 应用壳 | 元素声明 `scope`（`global` = 跨页共享的 header/导航/footer，`page` = 页面内容）；壳只设计一次、跨需求复用，页面子树不含壳，实现阶段在应用入口渲染一次并包裹所有路由 |
 
 ---
 
@@ -143,6 +150,8 @@ uv run python scripts\package.py -o compiler.zip
   API/页面/trigger 契约与各类测试；`runner-events.jsonl` 记录 `runner_state` / `requirement_state`，
   缺失图片只产生 warning。
 - **E2E 复用已用真实产物本地复现验证**：冷启动 4.27 s → 复用 3.05 s（同一条 spec、同为 2 passed），强制回退 5.03 s，三次输出均可解析且无任何 [e2e] 行。
+- **全局壳已落地**：旧产物在新规则下会报"several pages share no global shell"，说明壳缺口可被设计阶段识别；
+  `tests/test_ui_shell.py` 18 条覆盖 scope 继承、壳投影、页面/壳分离与提示词通用性。
 - **语义 IR 已落地**：旧产物规范化后得到 button=12/link=9/navigation=0 的分布，印证"规范化只是兜底，
   语义要靠新提示词重新设计"；`tests/test_ui_semantics.py` 18 条覆盖派生、纠正、告警与提示词规则。
 - **义务账本在真实产物上自洽**：用仓库内 `output/demo/.arc` 实跑得到 59 条义务 / 3 个需求，

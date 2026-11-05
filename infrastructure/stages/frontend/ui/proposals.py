@@ -5,7 +5,13 @@ import json
 
 EXAMPLE = {
     "elements": {
-        "UI-home": {"type": "page", "role": "page", "parent": None, "mode": [], "data": [], "prop": {}},
+        "UI-app-nav": {"type": "container", "role": "navigation", "name": "Main navigation",
+            "scope": "global", "parent": None, "mode": [], "data": [], "prop": {}},
+        "UI-app-home-link": {"type": "link", "role": "link", "scope": "global",
+            "parent": "UI-app-nav", "mode": ["user_read"], "data": [],
+            "prop": {"label": "Home", "href": "/"}},
+        "UI-home": {"type": "page", "role": "page", "scope": "page", "parent": None,
+            "mode": [], "data": [], "prop": {}},
         "UI-search": {"type": "input", "role": "textbox", "parent": "UI-home",
             "mode": ["user_write"],
             "data": [{"var": "search.query", "dtype": "string", "constraints": []}],

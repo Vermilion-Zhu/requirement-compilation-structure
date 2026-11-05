@@ -11,11 +11,12 @@ production initial values, example runtime objects or display fixtures.
 
 OUTPUT CONTRACT
 Return one JSON object with four sibling keys: elements, pages, requirement_ui, step_ui.
-elements maps ELEMENT IDs to {type, role, name, parent, mode, data, prop}. A page root has
-type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary
+elements maps ELEMENT IDs to {type, role, name, scope, parent, mode, data, prop}. A page root
+has type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary
 types: container, form, input, checkbox, select, button, text, heading, link, list, item,
-image, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional.
-mode is an array containing user_read and/or user_write, or [].
+image, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional;
+scope is "global" for application chrome and "page" otherwise. mode is an array
+containing user_read and/or user_write, or [].
 
 data is an array of variable declarations: {var, dtype, constraints}.
 var is the frontend variable name; dtype is string, integer, number, boolean, array,
@@ -36,6 +37,21 @@ wording in the existing element.prop; do not create a separate naming registry.
 Explicit requirement wording takes precedence over visual-reference examples. Only choose
 wording freely when it is unspecified or alternatives are explicitly allowed. Business
 record names and user-entered values remain dynamic; example data is not fixed UI wording.
+
+APPLICATION SHELL
+The application has one shell: the header, primary navigation, footer and other chrome that
+every page shares. Design it once, not once per page.
+- Declare each shell element with scope "global" and no page parent (parent=null); its
+  children inherit the global scope. Shell elements are page-independent, so they are not
+  part of any page subtree.
+- Read the existing pages and the existing shell before proposing. Reuse the shell element
+  IDs instead of declaring another header or navigation for a new page; extend the shell
+  only when the requirement adds a genuinely new global entry.
+- A page root and its content use scope "page". Do not copy shell elements into a page and
+  do not give a page its own duplicate primary navigation.
+- A page-local navigation is allowed only for page content (for example a breadcrumb or a
+  section switcher); the primary navigation belongs to the shell.
+The request lists the current shell; keep it consistent across requirements.
 
 ACCESSIBILITY CONTRACT
 Declare role for every element. role states what the control is, independently of styling:
@@ -97,6 +113,7 @@ ROLE_FAMILIES = {
 }
 # Roles whose meaning depends on an accessible name the markup cannot derive from its text.
 NAMED_ROLES = {"region", "navigation"}
+SCOPES = {"page", "global"}
 
 
 def derived_role(node: dict) -> str:
@@ -143,8 +160,9 @@ def data_symbols(elements: dict) -> dict:
 
 
 def page_context(design: dict, pid: str) -> dict:
-    """Return a page and its UI subtree, including inline variable declarations."""
-    return {"id": pid, **deepcopy(design["pages"][pid]), "elements": page_elements(design, pid)}
+    """Return a page, its UI subtree and the page-independent application shell."""
+    return {"id": pid, **deepcopy(design["pages"][pid]), "elements": page_elements(design, pid),
+        "shell": shell_context(design)}
 
 
 def owners(design: dict, pid: str) -> list[str]:
@@ -187,10 +205,41 @@ def normalize_design(design, tree):
             node["name"] = name.strip()
         else:
             node.pop("name", None)
+        scope = str(node.get("scope") or "").strip().lower()
+        node["scope"] = scope if scope in SCOPES else "page"
+    inherit_global_scope(design)
     for kind, expected in (("requirements", tree.requirements), ("steps", tree.steps)):
         for identity in expected:
             design[kind].setdefault(identity, [])
     return design
+
+
+def inherit_global_scope(design: dict) -> None:
+    """Give every child of a global element the global scope as well."""
+    elements = design["elements"]
+    changed = True
+    while changed:
+        changed = False
+        for node in elements.values():
+            if node.get("scope") == "global":
+                continue
+            parent = elements.get(node.get("parent")) if isinstance(node.get("parent"), str) else None
+            if parent is not None and parent.get("scope") == "global":
+                node["scope"] = "global"
+                changed = True
+
+
+def shell_elements(design: dict) -> dict:
+    """Return the page-independent shell subtree: global elements and their children."""
+    return {uid: deepcopy(node) for uid, node in design["elements"].items()
+        if node.get("scope") == "global"}
+
+
+def shell_context(design: dict) -> dict:
+    """Return the shell as an ordered element map for the request."""
+    shell = shell_elements(design)
+    roots = [uid for uid, node in shell.items() if node.get("parent") not in shell]
+    return {"roots": roots, "elements": shell}
 
 
 def semantic_issues(design: dict) -> list[str]:
@@ -207,6 +256,12 @@ def semantic_issues(design: dict) -> list[str]:
         label = (node.get("prop") or {}).get("label")
         if role in NAMED_ROLES and not (node.get("name") or label):
             issues.append(f"{uid}: {role} needs an accessible name")
+        if node.get("scope") == "global":
+            parent = design["elements"].get(node.get("parent")) if isinstance(node.get("parent"), str) else None
+            if parent is not None and parent.get("scope") != "global":
+                issues.append(f"{uid}: global element must not be nested in a page")
+    if len(design["pages"]) > 1 and not shell_elements(design):
+        issues.append("design: several pages share no global shell")
     return issues
 
 

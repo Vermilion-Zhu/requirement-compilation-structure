@@ -34,6 +34,15 @@ rebuild the application with only this page. Support parameterized routes using 
 router/framework or appropriate application code. Do not require a dynamic route pattern
 to equal the literal browser pathname. Route metadata describes intended navigation.
 
+APPLICATION SHELL
+task.page.shell lists the global elements (scope=global). They belong to the application
+entrypoint, not to this page: render them once in the route layout (for example App.tsx),
+mount every page inside that layout, and keep the shell on every route, including routes
+implemented earlier or later. Never declare a second header or primary navigation inside a
+page component. Use the shell element IDs as their data-testid values and render their
+declared roles. If the shell does not exist yet when you begin, add it to the entrypoint
+before finishing; if it exists, extend it instead of duplicating it.
+
 Choose component-local state, a shared store or another appropriate mechanism. Initialize
 safe unloaded values and explicit requirement defaults in application code; never manufacture
 loaded business objects from reference images. element.data declares variables, types and
