@@ -59,7 +59,7 @@
 | --- | --- | --- |
 | **读取权限** | 日志里有 10 次 `This task cannot read this file`，全部发生在第 12 阶段的独立验收生成/复核，白耗了修复轮次 | 验收任务的只读白名单补上编译器自有基础设施与元数据（三个 `package.json`、`db/initialize.ts`、`db/client.ts`、`playwright.e2e.config.ts`、`vite.e2e.config.ts`）；错误信息改为列出"本次可读文件"并明确"应用源码不可读，请改用任务证据"；验收提示词同步说明，避免反复重试 |
 | **轮次预算** | 冒烟中 REQ-2 的独立验收用到 9/10 轮，接近耗尽 | 所有 agent 循环的 `max_turns` 默认值 10 → **20**（05 数据库修复、08 后端 TDD、10 UI TDD、12 触发器/验收），CLI 默认值同步；按"优先保证正确率"的要求，接受最坏情况下更长 |
-| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端，第 12 阶段 377 s 花在这里 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定（这样复用的 Vite 代理仍指向正确后端）、后端源代码指纹变化时才重启后端、数据库文件复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；任何启动失败自动回退到"每次新起服务器"的旧行为，阶段结束时 `stop_e2e_servers` 回收进程与临时库 |
+| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（首版因 Vite 相对路径写错导致复用从未成功，已在 956d585 之后的修复中改正） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
 测试现状：`218 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
@@ -126,6 +126,10 @@ uv run python scripts\package.py -o compiler.zip
 - 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`interfaces` / `tests` 表记录
   API/页面/trigger 契约与各类测试；`runner-events.jsonl` 记录 `runner_state` / `requirement_state`，
   缺失图片只产生 warning。
+- **两次正式任务运行已对比**（同一任务，11 需求 / 8 API / 9 页面）：第一版 4795 s、外部测试 3/12；
+  含 E2E 复用的版本 10782 s、外部测试 4/12。增量中约 4.7 ks 来自"复用从未成功、每次空等 180 s"的
+  路径 bug（已修复并补回归测试），约 1.0 ks 来自服务端单次延迟翻倍（调用数反而更少）；
+  读取拒绝 27→0、拒绝轮次 43→21、内部冒烟从部分失败转为全绿。
 - **Smoke Competition 已完成一次端到端运行**（第一轮提交的代码），13/13 pass 完成、
   23/23 后端测试通过、UI 与端到端全绿；日志显示 98 次模型调用、输入 1.32M tokens
   （其中 63% 命中缓存）、输出 186k tokens，总耗时约 34.5 分钟。第 12 阶段占 47% 时间，

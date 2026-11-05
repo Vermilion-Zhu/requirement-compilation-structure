@@ -52,11 +52,12 @@ export default defineConfig({
 '''
 
 RUNNER_SOURCE = '''// One server pair per application, reused by later E2E invocations.
-// Ports stay stable so a reused Vite proxy keeps pointing at the backend. Any
-// startup failure falls back to Playwright-managed servers on fresh ports.
+// Ports stay stable so a reused Vite proxy keeps pointing at the backend. A
+// startup failure disables reuse for the rest of the stage, so a broken
+// environment costs one attempt instead of one per spec.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,6 +65,9 @@ import { createServer } from "node:net";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const statePath = join(root, ".arc", "e2e-servers.json");
+// Playwright runs webServer commands with the config directory as cwd, so the
+// hoisted workspace dependency is reached through ".."; mirror that exactly.
+const VITE_BINARY = "../node_modules/vite/bin/vite.js";
 
 function readState() {
   try { return JSON.parse(readFileSync(statePath, "utf8")); } catch { return null; }
@@ -71,6 +75,13 @@ function readState() {
 function writeState(state) {
   mkdirSync(join(root, ".arc"), { recursive: true });
   writeFileSync(statePath, JSON.stringify(state, null, 2) + "\\n");
+}
+const logPath = role => join(root, ".arc", "e2e-" + role + ".log");
+function logTail(role) {
+  try {
+    const lines = readFileSync(logPath(role), "utf8").trim().split("\\n");
+    return lines.slice(-3).join(" | ").slice(-500);
+  } catch { return ""; }
 }
 function backendFingerprint() {
   const hash = createHash("sha256");
@@ -94,10 +105,13 @@ async function healthy(url) {
     return response.ok;
   } catch { return false; }
 }
-async function waitFor(url, timeout) {
+async function waitFor(url, timeout, child) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (await healthy(url)) return true;
+    // A process that already exited will never become healthy: fail fast instead
+    // of waiting out the whole timeout for every spec.
+    if (child && child.exitCode !== null) return false;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   return false;
@@ -117,22 +131,30 @@ async function freePort() {
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   return port;
 }
-function startDetached(argv, cwd, env) {
-  const child = spawn(process.execPath, argv, { cwd, detached: true, stdio: "ignore", env: { ...process.env, ...env } });
+function startDetached(role, argv, cwd, env) {
+  const log = openSync(logPath(role), "a");
+  const child = spawn(process.execPath, argv, { cwd, detached: true, stdio: ["ignore", log, log], env: { ...process.env, ...env } });
+  closeSync(log);
   child.unref();
-  return child.pid;
+  return child;
+}
+async function startServer(role, argv, cwd, env, url, binary) {
+  if (binary && !existsSync(binary)) throw new Error(role + " binary not found at " + binary);
+  const child = startDetached(role, argv, cwd, env);
+  if (await waitFor(url, 120000, child)) return child.pid;
+  try { process.kill(child.pid); } catch { /* already gone */ }
+  const detail = logTail(role);
+  throw new Error(role + " did not start" + (detail ? ": " + detail : " (no output)"));
 }
 function stop(pid) {
   if (!pid) return;
   try { process.kill(pid); } catch { /* already gone */ }
 }
 const temporary = () => mkdtempSync(join(process.env.ARC_E2E_TEMP_ROOT ?? tmpdir(), "arc-e2e-"));
-
 const backendUrl = port => `http://127.0.0.1:${port}/api/health`;
 const frontendUrl = port => `http://127.0.0.1:${port}/`;
 
-async function prepare() {
-  const cached = readState();
+async function prepare(cached) {
   const fingerprint = backendFingerprint();
   const backendPort = cached?.backend_port ?? await freePort();
   let frontendPort = cached?.frontend_port ?? await freePort();
@@ -153,18 +175,20 @@ async function prepare() {
     if (await healthy(backendUrl(backendPort))) await waitUntilDown(backendUrl(backendPort), 5000);
     if (!directory) directory = temporary();
     if (!database || !existsSync(database)) database = join(directory, "app.db");
-    pids.backend = startDetached(["--import", "tsx", "backend/src/server.ts"], root,
-      { PORT: String(backendPort), DATABASE_URL: database });
-    if (!await waitFor(backendUrl(backendPort), 120000)) throw new Error("backend server did not start");
+    pids.backend = await startServer("backend",
+      ["--import", "tsx", "backend/src/server.ts"], root,
+      { PORT: String(backendPort), DATABASE_URL: database },
+      backendUrl(backendPort), join(root, "backend/src/server.ts"));
   }
   if (!reuse_frontend) {
     stop(pids.frontend);
     pids.frontend = undefined;
     if (await healthy(frontendUrl(frontendPort))) await waitUntilDown(frontendUrl(frontendPort), 5000);
-    pids.frontend = startDetached(["node_modules/vite/bin/vite.js", "--config", "vite.e2e.config.ts",
-      "--host", "127.0.0.1", "--port", String(frontendPort), "--strictPort"], join(root, "frontend"),
-      { ARC_BACKEND_URL: `http://127.0.0.1:${backendPort}` });
-    if (!await waitFor(frontendUrl(frontendPort), 180000)) throw new Error("vite dev server did not start");
+    pids.frontend = await startServer("frontend",
+      [VITE_BINARY, "--config", "vite.e2e.config.ts", "--host", "127.0.0.1",
+        "--port", String(frontendPort), "--strictPort"], join(root, "frontend"),
+      { ARC_BACKEND_URL: `http://127.0.0.1:${backendPort}` },
+      frontendUrl(frontendPort), join(root, "node_modules/vite/bin/vite.js"));
   }
   const state = { backend_port: backendPort, frontend_port: frontendPort, database, directory,
     hash: fingerprint, pids, reuse_backend: true, reuse_frontend: true };
@@ -206,14 +230,22 @@ function playwright(state) {
   });
 }
 
+const cached = readState();
 let state;
-try {
-  state = await prepare();
-} catch (error) {
-  console.error("[e2e] server reuse unavailable, falling back to per-run servers:",
-    error && error.message ? error.message : error);
-  rmSync(join(root, ".arc", "e2e-servers.json"), { force: true });
+if (cached && cached.disabled) {
   state = await freshState();
+  console.log("[e2e] per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+} else {
+  try {
+    state = await prepare(cached);
+    console.log("[e2e] reusing servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+  } catch (error) {
+    const reason = error && error.message ? error.message : String(error);
+    console.error("[e2e] server reuse unavailable, falling back to per-run servers:", reason);
+    writeState({ disabled: true, reason });
+    state = await freshState();
+    console.log("[e2e] per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+  }
 }
 process.exitCode = await playwright(state);
 '''

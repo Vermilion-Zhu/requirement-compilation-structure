@@ -103,8 +103,17 @@ class ReusedE2EServers(unittest.TestCase):
             self.assertEqual(config.count("reuseExistingServer: reuse"), 2)
             runner = (output / RUNNER).read_text(encoding="utf-8")
             for marker in ("ARC_E2E_REUSE_BACKEND", "ARC_E2E_REUSE_FRONTEND",
-                    "falling back to per-run servers", "backendFingerprint"):
+                    "falling back to per-run servers", "backendFingerprint",
+                    "child.exitCode !== null", "cached.disabled", "binary not found at",
+                    "[e2e] reusing servers", "[e2e] per-run servers"):
                 self.assertIn(marker, runner)
+            # The detached Vite start must resolve the hoisted binary exactly like the
+            # Playwright command does; using "node_modules/..." from frontend/ (the cwd)
+            # failed for every spec in the first reused-server run.
+            self.assertIn("../node_modules/vite/bin/vite.js", runner)
+            self.assertIn("../node_modules/vite/bin/vite.js", config)
+            self.assertEqual(config.count("../node_modules/vite/bin/vite.js"), 1)
+            self.assertEqual(runner.count("node_modules/vite/bin/vite.js"), 2)
             package = json.loads((output / "package.json").read_text(encoding="utf-8"))
             self.assertEqual(package["scripts"]["test:e2e"], "node frontend/scripts/test-e2e.mjs")
 
