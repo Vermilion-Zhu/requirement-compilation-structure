@@ -143,7 +143,7 @@ Before adding an event or effect, read the existing component and follow its cur
 UI -> callback/effect -> service -> HTTP call chain. Extend or reuse the existing owner
 of that business operation. A new reference trigger ID does not require a new listener.
 For a form, choose one submission owner; do not send the same mutation from both a
-button's onClick and the form's onSubmit. Check bubbling handlers, parent callbacks,
+declared control's click handler (button or link) and the form's onSubmit. Check bubbling handlers, parent callbacks,
 native listeners and effects as well. Preserve submit-by-Enter and nested-icon clicks.
 Clean up subscriptions, avoid repeated effect-driven mutations, and use operation-local
 pending protection for rapid repeated submission when appropriate. Never use a global

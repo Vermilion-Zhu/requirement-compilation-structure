@@ -46,6 +46,12 @@ input synchronization; no such host is generated.
 
 Render real layout, labels, controls and conditional content with original text and stable
 data-testid=ELEMENT_ID selectors. Use the installed dependencies and configured styles.
+Each element declares role and may declare name; render that role, not whichever tag seems
+convenient. A button role is a real button element (use the router's navigation call on
+click when it also changes the route), a link role is an anchor with its href, a navigation
+role is a nav landmark around its links, and a region role is a landmark labelled with the
+declared name. Use element.name as the accessible name when present; otherwise the visible
+text is the name. data-testid serves tests only and never replaces a role or label.
 Preserve every explicitly required UI name and role verbatim, including language, spelling
 and case. Do not rename "Name" to "Shelf name", translate captions, or combine aliases.
 Keep visible labels and computed accessible names consistent: associate labels correctly,

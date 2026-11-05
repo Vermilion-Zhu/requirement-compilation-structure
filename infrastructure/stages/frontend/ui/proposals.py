@@ -5,11 +5,13 @@ import json
 
 EXAMPLE = {
     "elements": {
-        "UI-home": {"type": "page", "parent": None, "mode": [], "data": [], "prop": {}},
-        "UI-search": {"type": "input", "parent": "UI-home", "mode": ["user_write"],
+        "UI-home": {"type": "page", "role": "page", "parent": None, "mode": [], "data": [], "prop": {}},
+        "UI-search": {"type": "input", "role": "textbox", "parent": "UI-home",
+            "mode": ["user_write"],
             "data": [{"var": "search.query", "dtype": "string", "constraints": []}],
             "prop": {"label": "Search"}},
-        "UI-results": {"type": "list", "parent": "UI-home", "mode": ["user_read"],
+        "UI-results": {"type": "list", "role": "region", "name": "Search results", "parent": "UI-home",
+            "mode": ["user_read"],
             "data": [{"var": "search.results", "dtype": "array",
                 "constraints": ["Entries contain id and title strings and match the submitted query"]}], "prop": {}},
     },

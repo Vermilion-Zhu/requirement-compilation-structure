@@ -11,10 +11,11 @@ production initial values, example runtime objects or display fixtures.
 
 OUTPUT CONTRACT
 Return one JSON object with four sibling keys: elements, pages, requirement_ui, step_ui.
-elements maps ELEMENT IDs to {type, parent, mode, data, prop}. A page root has type
-"page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary types:
-container, form, input, checkbox, select, button, text, heading, link, list, item, image,
-alert or table. mode is an array containing user_read and/or user_write, or [].
+elements maps ELEMENT IDs to {type, role, name, parent, mode, data, prop}. A page root has
+type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary
+types: container, form, input, checkbox, select, button, text, heading, link, list, item,
+image, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional.
+mode is an array containing user_read and/or user_write, or [].
 
 data is an array of variable declarations: {var, dtype, constraints}.
 var is the frontend variable name; dtype is string, integer, number, boolean, array,
@@ -36,6 +37,26 @@ Explicit requirement wording takes precedence over visual-reference examples. On
 wording freely when it is unspecified or alternatives are explicitly allowed. Business
 record names and user-entered values remain dynamic; example data is not fixed UI wording.
 
+ACCESSIBILITY CONTRACT
+Declare role for every element. role states what the control is, independently of styling:
+page, main, region, navigation, heading, button, link, textbox, checkbox, combobox, list,
+listitem, form, img, alert, table, dialog, text or container.
+Choose role by behavior, not by destination:
+- A control that changes data or the current record/form, opens an editor or dialog, submits,
+  saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
+  activating it changes the route: an action is never modelled as a link.
+- A control that only reveals another content view inside the reading flow (primary
+  navigation, breadcrumbs, links inside a list of records) is role link, and the container
+  that groups them is role navigation.
+- A group of records or items is role region with an explicit name. Status and error
+  messages are role alert. A form is role form, and every input declares textbox, checkbox
+  or combobox and is labelled by its visible label.
+- A page root is role page; use container for ungrouped layout boxes.
+Declare name only when the accessible name differs from the visible text: icon-only controls,
+icon-only regions, or a caption that is not rendered. Otherwise omit name and keep the
+visible wording exact. name never paraphrases, duplicates or decorates a label. When the
+original requirement states a role, that role wins over visual inference.
+
 pages maps PAGE IDs to {name, route, root, images}. route is a URL path, root is an
 ELEMENT ID and images lists supplied image IDs. Preserve explicit image.page hints.
 Do not add fixtures or sample objects. Reference images describe appearance, not actual
@@ -55,6 +76,36 @@ Preserve visible labels in their original language. UI has no DB field-mapping m
 """
 
 OUTPUT_TEMPLATE = {"elements": {}, "pages": {}, "requirement_ui": [], "step_ui": {}}
+
+# Semantic vocabulary. `role` is where the design states the accessibility contract; the
+# implementation renders it, so the mapping stays independent of any single application.
+ROLE_BY_TYPE = {
+    "page": "page", "container": "container", "form": "form", "input": "textbox",
+    "checkbox": "checkbox", "select": "combobox", "button": "button", "link": "link",
+    "text": "text", "heading": "heading", "list": "list", "item": "listitem",
+    "image": "img", "alert": "alert", "table": "table",
+}
+ROLE_BY_INPUT_TYPE = {"checkbox": "checkbox", "radio": "radio", "number": "spinbutton"}
+# Only roles whose element implementation is unambiguous are constrained. Structural
+# containers (container, list, item, text) may legitimately carry a richer role.
+ROLE_FAMILIES = {
+    "page": {"page", "main"}, "form": {"form"},
+    "input": {"textbox", "checkbox", "combobox", "spinbutton", "radio", "searchbox"},
+    "checkbox": {"checkbox"}, "select": {"combobox"}, "button": {"button"},
+    "link": {"link"}, "heading": {"heading"}, "image": {"img"}, "alert": {"alert"},
+    "table": {"table"},
+}
+# Roles whose meaning depends on an accessible name the markup cannot derive from its text.
+NAMED_ROLES = {"region", "navigation"}
+
+
+def derived_role(node: dict) -> str:
+    """Return the role implied by an element's type and input type."""
+    kind = str(node.get("type") or "").strip().lower()
+    if kind == "input":
+        input_type = str((node.get("prop") or {}).get("input_type") or "").strip().lower()
+        return ROLE_BY_INPUT_TYPE.get(input_type, "textbox")
+    return ROLE_BY_TYPE.get(kind, "container")
 
 
 class UIResponseError(ValueError):
@@ -116,7 +167,7 @@ def visible(design: dict, uid: str, values: dict) -> bool:
 
 
 def normalize_design(design, tree):
-    """Fill optional page metadata; accept model decisions without design gates."""
+    """Fill optional page metadata and semantic defaults without rejecting model decisions."""
     for pid, page in design["pages"].items():
         page.setdefault("name", pid)
         page.setdefault("images", [])
@@ -124,10 +175,39 @@ def normalize_design(design, tree):
         node.setdefault("mode", [])
         node.setdefault("data", [])
         node.setdefault("prop", {})
+        declared = str(node.get("role") or "").strip().lower()
+        node["role"] = declared or derived_role(node)
+        # The declared role is authoritative when it describes the same axis as the type:
+        # an action declared as a button must not be implemented as an anchor and vice versa.
+        kind = str(node.get("type") or "").strip().lower()
+        if declared in {"button", "link"} and kind in {"button", "link"} and declared != kind:
+            node["type"] = declared
+        name = node.get("name")
+        if isinstance(name, str) and name.strip():
+            node["name"] = name.strip()
+        else:
+            node.pop("name", None)
     for kind, expected in (("requirements", tree.requirements), ("steps", tree.steps)):
         for identity in expected:
             design[kind].setdefault(identity, [])
     return design
+
+
+def semantic_issues(design: dict) -> list[str]:
+    """Report roles that contradict their element type or lack a required name."""
+    issues = []
+    for uid, node in design["elements"].items():
+        kind = str(node.get("type") or "").strip().lower()
+        role = str(node.get("role") or "").strip().lower()
+        family = ROLE_FAMILIES.get(kind)
+        if kind not in ROLE_BY_TYPE:
+            issues.append(f"{uid}: unknown type {kind!r}")
+        elif family is not None and role not in family:
+            issues.append(f"{uid}: role {role!r} conflicts with type {kind!r}")
+        label = (node.get("prop") or {}).get("label")
+        if role in NAMED_ROLES and not (node.get("name") or label):
+            issues.append(f"{uid}: {role} needs an accessible name")
+    return issues
 
 
 def apply_proposal(design, proposal, rid, tree):

@@ -6,7 +6,7 @@ components. Prompts and design records live in ui/design.py."""
 
 import json
 
-from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, UIResponseError, data_symbols
+from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, UIResponseError, data_symbols, semantic_issues
 from infrastructure.stages.frontend.ui.proposals import INSTRUCTIONS as EXAMPLE_INSTRUCTIONS
 from infrastructure.shared.rag.pages import PageRetriever
 from infrastructure.utils.files import save_json
@@ -89,6 +89,13 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
             console.artifact("ui_design", design, label + " | Accepted UI")
     failures.finish()
     normalize_design(design, tree)
-    save_json(arc_dir / "ui_design.json", design)
+    roles = {}
+    for node in design["elements"].values():
+        roles[node["role"]] = roles.get(node["role"], 0) + 1
+    print("UI semantics: " + ", ".join(f"{role}={count}" for role, count in sorted(roles.items())), flush=True)
+    issues = semantic_issues(design)
+    if issues:
+        print("UI semantics warnings:" + chr(10) + "  "
+            + (chr(10) + "  ").join(issues[:8]), flush=True)
     console.show("UI/data design complete for ALL requirements", f"Saved {arc_dir / 'ui_design.json'}\nRun the UI-implementation pass (10) for existence tests and page implementation. Interactions belong to step 11.")
     return design
