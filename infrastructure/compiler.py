@@ -10,6 +10,7 @@ from infrastructure.stages.passes import PASS_MODULES
 from infrastructure.utils.presentation.console import show_panel
 from infrastructure.utils.presentation.logging import console_log
 from infrastructure.utils.files import save_json
+from infrastructure.shared import obligations
 from infrastructure.shared.project import runtime_events
 from infrastructure.shared.project.git import checkpoint
 
@@ -28,6 +29,7 @@ class Compiler:
         self.artifacts: dict[str, object] = {}
         self.current_stage: str | None = None
         self.report = {"status": "NOT_STARTED", "stages": {}}
+        self.ledger: dict | None = None
         # Best-effort ARC-Bench visualization state; never blocks compilation.
         runtime_events.initialize(self.output_dir)
 
@@ -65,6 +67,8 @@ class Compiler:
         save_json(self.arc_dir / "compilation.json", self.report)
         checkpoint(self.output_dir, stage=module, task="stage report", action="Publish pass result",
             status=status, details=self.report["stages"][module])
+        # Project the artifacts into one obligation ledger; never affects the pass.
+        self.ledger = obligations.refresh(self.arc_dir) or self.ledger
         return result
 
     def compile(self) -> Path:
@@ -106,6 +110,13 @@ class Compiler:
         incomplete = [stage for stage, result in self.report["stages"].items()
             if result["status"] in {"FAILED", "COMPLETED_WITH_FAILURES"}]
         self.report["status"] = "COMPLETED_WITH_FAILURES" if incomplete else "GREEN"
+        ledger = self.ledger or obligations.refresh(self.arc_dir)
+        if ledger:
+            self.report["obligations"] = {
+                "status": ledger.get("status"), "resolved": ledger.get("resolved"),
+                "totals": ledger.get("totals"), "unresolved": ledger.get("unresolved", []),
+                "artifact": ".arc/" + obligations.LEDGER,
+            }
         save_json(self.arc_dir / "compilation.json", self.report)
         checkpoint(self.output_dir, stage="compiler", task="pipeline", action="Publish final compilation report",
             status=self.report["status"], details={"stages": self.report["stages"], "incomplete_stages": incomplete})
@@ -113,6 +124,7 @@ class Compiler:
             f"{self.report['status']}: {len(incomplete)} incomplete pass(es)")
         show_panel("[DONE] Requirement compilation | " + self.report["status"],
             f"Application: {self.output_dir}\nReport: {self.arc_dir / 'compilation.json'}"
-            + ("\nIncomplete stages: " + ", ".join(incomplete) if incomplete else ""),
+            + ("\nIncomplete stages: " + ", ".join(incomplete) if incomplete else "")
+            + ("" if not ledger else "\n" + obligations.summary(ledger)),
             tone="error" if incomplete else "success")
         return self.output_dir

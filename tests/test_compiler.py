@@ -3,6 +3,7 @@
 from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from importlib import import_module
 from io import StringIO
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -145,8 +146,16 @@ class CompilerPipeline(unittest.TestCase):
             self.assertEqual(compiler.artifacts['backend_checks']['status'], 'NO_APIS')
             self.assertEqual(compiler.artifacts['frontend_e2e']['status'], 'NO_UI')
             for name in ('requirements', 'db_schema', 'db_obligations', 'backend_apis',
-                    'backend_tdd', 'ui_design', 'ui_checks', 'frontend_triggers', 'frontend_e2e'):
+                    'backend_tdd', 'ui_design', 'ui_checks', 'frontend_triggers', 'frontend_e2e',
+                    'obligations'):
                 self.assertTrue((compiler.arc_dir / (name + '.json')).is_file(), name)
+            # The ledger is published after every pass, so even a no-op task has one.
+            ledger = json.loads((compiler.arc_dir / 'obligations.json').read_text(encoding='utf-8'))
+            self.assertEqual(ledger['totals']['total'], 0)
+            self.assertTrue(ledger['resolved'])
+            self.assertEqual(compiler.report['obligations']['status'], 'RESOLVED')
+            self.assertTrue(compiler.report['obligations']['resolved'])
+            self.assertEqual(compiler.report['obligations']['artifact'], '.arc/obligations.json')
             self.assertIsNone(compiler.current_stage)
 
 

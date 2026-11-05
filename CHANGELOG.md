@@ -62,7 +62,14 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（首版因 Vite 相对路径写错导致复用从未成功，已在 956d585 之后的修复中改正） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
-测试现状：`218 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+### 2.4 第四轮：D1 — Obligation 账本
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
+| **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
+
+测试现状：`228 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -82,6 +89,7 @@
 | 模型 | 只读 `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `MODEL`；不写死地址或 Key；平台环境下不覆盖注入值 |
 | 依赖 | agent 依赖在根 `requirements.txt`（含本地 SDK `./arcbench-agent-runtime`），应用依赖在应用自己的 `package.json` |
 | 可视化 | `ARCBENCH_RUNNER_EVENTS_PATH` 的 JSONL 与 `ARCBENCH_TRACEABILITY_DIR` 的 7 张表由 `runtime_events` 写入 |
+| 义务账本 | `.arc/obligations.json` 汇总每条数据义务的归属、分配者、生命周期状态与验收证据，摘要写入 `compilation.json` |
 
 ---
 
@@ -126,6 +134,8 @@ uv run python scripts\package.py -o compiler.zip
 - 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`interfaces` / `tests` 表记录
   API/页面/trigger 契约与各类测试；`runner-events.jsonl` 记录 `runner_state` / `requirement_state`，
   缺失图片只产生 warning。
+- **义务账本在真实产物上自洽**：用仓库内 `output/demo/.arc` 实跑得到 59 条义务 / 3 个需求，
+  全部 `Implemented`、`resolved=true`（该目录缺少 trigger 产物，因此只有 `api` 分配者）。
 - **两次正式任务运行已对比**（同一任务，11 需求 / 8 API / 9 页面）：第一版 4795 s、外部测试 3/12；
   含 E2E 复用的版本 10782 s、外部测试 4/12。增量中约 4.7 ks 来自"复用从未成功、每次空等 180 s"的
   路径 bug（已修复并补回归测试），约 1.0 ks 来自服务端单次延迟翻倍（调用数反而更少）；
@@ -149,9 +159,9 @@ uv run python scripts\package.py -o compiler.zip
 
 ## 6. 下一步
 
-1. **算法改进**（见 `principle.md` 与详细分析）：把 Ω 做成带生命周期与证据的一等状态、
-   给声明式 R/W 补上"实际访问"的静态检查、实现 Reference 的 data/state 两种语义、
-   用有界定点迭代替代"失败就往下走"。
+1. **算法改进**（见 `principle.md` 与详细分析）：D1 账本已就位，下一步是 **D2**（把声明的 R/W
+   与生成代码的实际访问比对，暴露"声明了但没访问"与"访问了但没声明"）、再是 **D3**（Reference 的
+   data/state 两种语义）与 **D7**（把三层正确性汇总成 `correctness.json`）。
 2. **移植 legacy 用例**：按整文件替换、model-owned wiring、扁平 tool call 三条契约逐组重写。
 3. **用下一次冒烟日志验证本轮四项修正**：`max_turns=20` 是否消除耗尽、E2E 复用是否把第 12 阶段压下来、
    读取拒绝是否归零——直接跑 `python scripts/analyze_log.py <log>` 即可对比。
