@@ -59,7 +59,7 @@
 | --- | --- | --- |
 | **读取权限** | 日志里有 10 次 `This task cannot read this file`，全部发生在第 12 阶段的独立验收生成/复核，白耗了修复轮次 | 验收任务的只读白名单补上编译器自有基础设施与元数据（三个 `package.json`、`db/initialize.ts`、`db/client.ts`、`playwright.e2e.config.ts`、`vite.e2e.config.ts`）；错误信息改为列出"本次可读文件"并明确"应用源码不可读，请改用任务证据"；验收提示词同步说明，避免反复重试 |
 | **轮次预算** | 冒烟中 REQ-2 的独立验收用到 9/10 轮，接近耗尽 | 所有 agent 循环的 `max_turns` 默认值 10 → **20**（05 数据库修复、08 后端 TDD、10 UI TDD、12 触发器/验收），CLI 默认值同步；按"优先保证正确率"的要求，接受最坏情况下更长 |
-| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（首版因 Vite 相对路径写错导致复用从未成功，已在 956d585 之后的修复中改正） |
+| **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（两处缺陷已修：Vite 相对路径写错导致复用从未启动；复用成功后又因 runner 往 stdout 打状态行污染了 Playwright 的 JSON 报告，现状态统一走 stderr 且解析器可容忍前缀） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
 ### 2.4 第四轮：D1 — Obligation 账本
@@ -69,7 +69,7 @@
 | **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
 | **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
 
-测试现状：`228 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`230 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -128,7 +128,7 @@ uv run python scripts\package.py -o compiler.zip
 
 - 打包脚本产出结构正确的 ZIP（`main.py`、`requirements.txt`、`infrastructure/stages/passes/`、
   `arcbench-agent-runtime/`、模板与 `deploy.sh` 齐全；无 `.env`/`.venv`/`output/`）。
-- 全部单元测试：`218 tests, OK (skipped=48)`，与改动前基线逐条对比 **0 回归**。
+- 全部单元测试：`230 tests, OK (skipped=48)`，与改动前基线逐条对比 **0 回归**。
 - 模拟平台调用：用官方模板冒充注入基线执行 00 阶段，基线被完整移入备份目录，
   生成的 `backend/package.json` 为 `@arc/backend`，`deploy.sh` 通过 `bash -n`。
 - 本地无平台环境时：`ROOT`/`REQ` 树写入 7 张 traceability 表，`interfaces` / `tests` 表记录

@@ -14,6 +14,8 @@ from analyze_log import analyze_text, render  # noqa: E402  (scripts/ is not a p
 
 from infrastructure.stages.frontend.triggers.e2e_runtime import (  # noqa: E402
     CONFIG, FIXTURE, RUNNER, STATE, VITE_CONFIG, prepare_e2e, stop_e2e_servers)
+from infrastructure.stages.frontend.ui.testing import (  # noqa: E402
+    parse_playwright_result, playwright_report)
 
 
 SAMPLE = """\
@@ -91,6 +93,23 @@ class LogAnalysis(unittest.TestCase):
         self.assertIn("stages: 0 total", render(empty))
 
 
+PLAYWRIGHT_REPORT = {"suites": [], "stats": {"expected": 2, "unexpected": 0, "skipped": 0,
+    "flaky": 0, "duration": 1200}, "errors": []}
+
+
+class PlaywrightReportParsing(unittest.TestCase):
+    def test_a_status_prefix_on_stdout_does_not_break_the_report(self):
+        payload = "[e2e] reusing servers backend=3000 frontend=4171\n" + json.dumps(PLAYWRIGHT_REPORT)
+        parsed = parse_playwright_result({"stdout": payload, "returncode": 0, "output": payload})
+        self.assertEqual((parsed["passed"], parsed["failed"]), (2, 0))
+        self.assertEqual(parsed["test_seconds"], 1.2)
+
+    def test_real_output_is_still_rejected(self):
+        for payload in ("no report here", "{broken", "{} trailing prose"):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                playwright_report(payload)
+
+
 class ReusedE2EServers(unittest.TestCase):
     def test_prepare_writes_reuse_config_and_fallback_runner(self):
         with TemporaryDirectory() as temporary:
@@ -104,9 +123,14 @@ class ReusedE2EServers(unittest.TestCase):
             runner = (output / RUNNER).read_text(encoding="utf-8")
             for marker in ("ARC_E2E_REUSE_BACKEND", "ARC_E2E_REUSE_FRONTEND",
                     "falling back to per-run servers", "backendFingerprint",
-                    "child.exitCode !== null", "cached.disabled", "binary not found at",
-                    "[e2e] reusing servers", "[e2e] per-run servers"):
+                    "child.exitCode !== null", "cached.disabled", "binary not found at"):
                 self.assertIn(marker, runner)
+            # stdout is reserved for the Playwright JSON reporter: a status banner
+            # printed there makes the harness unable to parse the report.
+            self.assertNotIn("console.log(", runner)
+            self.assertIn("process.stderr.write(\"[e2e] \"", runner)
+            self.assertIn("report(\"reusing servers", runner)
+            self.assertIn("report(\"per-run servers", runner)
             # The detached Vite start must resolve the hoisted binary exactly like the
             # Playwright command does; using "node_modules/..." from frontend/ (the cwd)
             # failed for every spec in the first reused-server run.

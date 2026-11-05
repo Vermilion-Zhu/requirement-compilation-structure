@@ -151,6 +151,11 @@ function stop(pid) {
   try { process.kill(pid); } catch { /* already gone */ }
 }
 const temporary = () => mkdtempSync(join(process.env.ARC_E2E_TEMP_ROOT ?? tmpdir(), "arc-e2e-"));
+// stdout belongs to the Playwright JSON reporter; status goes to stderr so the
+// compiler can keep parsing stdout as one JSON document.
+function report(message) {
+  process.stderr.write("[e2e] " + message + "\n");
+}
 const backendUrl = port => `http://127.0.0.1:${port}/api/health`;
 const frontendUrl = port => `http://127.0.0.1:${port}/`;
 
@@ -234,17 +239,17 @@ const cached = readState();
 let state;
 if (cached && cached.disabled) {
   state = await freshState();
-  console.log("[e2e] per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+  report("per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
 } else {
   try {
     state = await prepare(cached);
-    console.log("[e2e] reusing servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+    report("reusing servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
   } catch (error) {
     const reason = error && error.message ? error.message : String(error);
-    console.error("[e2e] server reuse unavailable, falling back to per-run servers:", reason);
+    report("server reuse unavailable, falling back to per-run servers: " + reason);
     writeState({ disabled: true, reason });
     state = await freshState();
-    console.log("[e2e] per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
+    report("per-run servers backend=" + state.backend_port + " frontend=" + state.frontend_port);
   }
 }
 process.exitCode = await playwright(state);

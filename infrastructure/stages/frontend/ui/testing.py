@@ -123,10 +123,38 @@ def require_red(result: dict) -> None:
         raise ValueError(f"Expected missing-component assertion RED, not infrastructure/runtime failure: {result}")
 
 
+def playwright_report(stdout: str) -> dict:
+    """Read the JSON reporter output, tolerating lines printed before it.
+
+    Compiler-owned runners write their status to stderr, but a tool or a future
+    wrapper may still print a banner to stdout. Playwright's report is the last
+    JSON document on stdout, so accept the first line that yields a valid object
+    instead of failing the whole acceptance check on a harmless prefix.
+    """
+    text = stdout if isinstance(stdout, str) else ""
+    try:
+        report = json.loads(text)
+    except ValueError:
+        report = None
+    if isinstance(report, dict):
+        return report
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith("{"):
+            continue
+        try:
+            candidate = json.loads("\n".join(lines[index:]))
+        except ValueError:
+            continue
+        if isinstance(candidate, dict):
+            return candidate
+    raise ValueError("no Playwright JSON report found on stdout")
+
+
 def parse_playwright_result(result: dict, include_files: bool = False) -> dict:
     """Parse the Playwright JSON reporter into counts, failures, runtime errors, and optional per-file totals."""
     try:
-        report = json.loads(result.pop("stdout"))
+        report = playwright_report(result.pop("stdout"))
     except (ValueError, KeyError) as error:
         raise ValueError(f"Playwright did not return its JSON report: {result['output']}") from error
     failures = []
