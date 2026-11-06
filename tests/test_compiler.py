@@ -88,9 +88,9 @@ class CompilerPipeline(unittest.TestCase):
             self.assertEqual(compiler.report['stages']['12_implement_frontend_tdd']['status'], 'FAILED')
             self.assertIsNone(session_info())
 
-    def test_numbered_modules_expose_the_composed_pass_functions(self):
+    def test_packaged_passes_expose_the_composed_pass_functions(self):
         for module, function in PASSES:
-            self.assertTrue(callable(getattr(import_module(module), function)))
+            self.assertTrue(callable(getattr(import_module(PASS_MODULES[module]), function)))
 
     def test_the_pipeline_resolves_every_pass_inside_the_package(self):
         """The deliverable must not depend on the numbered teaching scripts."""

@@ -38,7 +38,7 @@ Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `MODEL` in `.env`. Use a model that
 
 ## Run
 
-The input directory must contain `requirements.yaml` and its referenced images. The examples use `input/` and write the generated application to `outputs/demo/`. The commands below work in PowerShell, bash, and zsh.
+The input directory must contain `requirements.yaml` and its referenced images. Supply your own input directory (shown as `input/` below); the commands write the generated application to `outputs/demo/`. The commands below work in PowerShell, bash, and zsh.
 
 ### Full pipeline
 
@@ -47,28 +47,6 @@ uv run main.py input --output-dir outputs/demo
 ```
 
 Add `--model-log` to display and save detailed model input/output, or `--port 33000` to change the backend port (default: 3000). Token usage and model latency are always shown.
-
-### Step by step
-
-Run these commands in order. They call the same 13 passes with the same default settings as `main.py`. Step 01 uses `--no-browse` to match the non-interactive pipeline.
-
-```bash
-uv run 00_project_initialization.py --input input --output outputs/demo
-uv run 01_explore_requirement.py --input input --output outputs/demo --no-browse
-uv run 02_build_db_schema.py --input input --output outputs/demo
-uv run 03_infer_db_obligations.py --input input --output outputs/demo
-uv run 04_check_db_obligations.py --input input --output outputs/demo
-uv run 05_implement_db.py --input input --output outputs/demo
-uv run 06_design_backend_apis.py --input input --output outputs/demo
-uv run 07_check_backend_apis.py --input input --output outputs/demo
-uv run 08_implement_backend_tdd.py --input input --output outputs/demo
-uv run 09_design_ui.py --input input --output outputs/demo
-uv run 10_implement_ui.py --input input --output outputs/demo
-uv run 11_design_frontend_triggers.py --input input --output outputs/demo
-uv run 12_implement_frontend_tdd.py --input input --output outputs/demo
-```
-
-For individual steps, add `--pause` for teaching pauses or `--debug-model-io` for detailed model I/O. Set a custom backend port with `--port` in step 00.
 
 ### Start the generated application
 
@@ -83,9 +61,7 @@ Open `http://localhost:3000` (or the port you selected).
 
 ## Code map and extension points
 
-![Compiler code map](assets/compiler-code-map.svg)
-
-Numbered scripts orchestrate each pass. Domain logic lives in `infrastructure/stages/`; shared agent and project services live in `infrastructure/shared/`.
+`main.py` invokes `infrastructure/compiler.py`, which calls the passes in `infrastructure/stages/passes/` directly. Domain logic lives in `infrastructure/stages/`; shared agent and project services live in `infrastructure/shared/`.
 
 ### Module guide
 
@@ -111,3 +87,14 @@ Numbered scripts orchestrate each pass. Domain logic lives in `infrastructure/st
 | Acceptance | Domain `testing.py` and runtime modules. | Support other application stacks or execution environments. |
 
 Keep each task focused on one requirement. Retrieve shared knowledge on demand, preserve canonical contracts, and use executable checks to accept changes.
+
+## Repository scope
+
+The repository contains the agent entry point, compiler implementation, application templates,
+vendored runtime, regression tests, and development tools. Numbered teaching entry points
+have been removed; use `main.py` for compilation.
+
+External `arc-bench/` checkouts, local `input/` tasks, `principle.md`, and the old
+`assets/compiler-code-map.svg` are not versioned or packaged. Existing local copies
+may remain for reference. Generated output, archives, and `.env` remain ignored.
+`arcbench-agent-runtime/` is a runtime dependency and must remain in the submission.
