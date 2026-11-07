@@ -135,7 +135,8 @@ def interface(interface_id: str, *, req_ids, kind: str, content: str,
     if store is None or not str(interface_id or "").strip():
         return
     try:
-        store.upsert_interface(interface_id=interface_id, req_ids=list(req_ids), type=kind,
+        store.upsert_interface(interface_id=interface_id, req_ids=list(req_ids),
+            type={"page": "ui"}.get(kind, kind),
             content=content, file_path=file_path, implemented=False,
             callers=list(callers), callees=list(callees))
     except Exception as error:
@@ -186,7 +187,9 @@ def test_case(test_id: str, *, requirement_id: str, kind: str, file_path: str | 
     if store is None or not str(test_id or "").strip() or not str(requirement_id or "").strip():
         return
     try:
-        store.upsert_test(test_id=test_id, req_id=requirement_id, type=kind, file_path=file_path,
+        # Publish test levels understood by the graph, preserving semantic test IDs.
+        level = {"api": "integration", "ui": "unit", "acceptance": "e2e"}.get(kind, kind)
+        store.upsert_test(test_id=test_id, req_id=requirement_id, type=level, file_path=file_path,
             passed=passed, scenario_id=scenario_id, interface_ids=list(interface_ids))
     except Exception as error:
         _warn(f"traceability test failed: {type(error).__name__}: {error}")

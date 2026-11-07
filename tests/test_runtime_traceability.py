@@ -115,7 +115,7 @@ class AdapterRows(TraceabilityTestCase):
         runtime_events.test_case("api:API-a", requirement_id="REQ-1", kind="api",
             file_path="backend/tests/REQ-1/API-a.test.ts", passed=False, interface_ids=["API-a"])
         row = table(self.arc, "tests")["api:API-a"]
-        self.assertEqual((row["req_id"], row["type"], row["passed"]), ("REQ-1", "api", False))
+        self.assertEqual((row["req_id"], row["type"], row["passed"]), ("REQ-1", "integration", False))
         self.assertEqual(row["file_path"], "backend/tests/REQ-1/API-a.test.ts")
         self.assertEqual(row["interface_ids"], ["API-a"])
 
@@ -148,7 +148,7 @@ class PassHooks(TraceabilityTestCase):
             design_frontend_ui(self.input, self.arc)
 
         page = table(self.arc, "interfaces")["UI-home"]
-        self.assertEqual((page["type"], page["req_ids"]), ("page", ["REQ-1"]))
+        self.assertEqual((page["type"], page["req_ids"]), ("ui", ["REQ-1"]))
         self.assertEqual(page["content"], "/ → UI-home")
 
         report = {"status": "GREEN", "pages": {"UI-home": {"status": "GREEN", "requirements": ["REQ-1"]}}}
@@ -160,7 +160,7 @@ class PassHooks(TraceabilityTestCase):
 
         self.assertTrue(table(self.arc, "interfaces")["UI-home"]["implemented"])
         suite = table(self.arc, "tests")["ui:UI-home"]
-        self.assertEqual((suite["req_id"], suite["type"], suite["passed"]), ("REQ-1", "ui", True))
+        self.assertEqual((suite["req_id"], suite["type"], suite["passed"]), ("REQ-1", "unit", True))
         self.assertEqual(suite["file_path"], "frontend/tests/ui/UI-home.spec.ts")
         self.assertEqual(suite["interface_ids"], ["UI-home"])
 
@@ -205,7 +205,7 @@ class PassHooks(TraceabilityTestCase):
         self.assertEqual(tests["e2e:REQ-1"]["type"], "e2e")
         self.assertEqual(tests["e2e:REQ-1"]["file_path"], "frontend/tests/e2e/REQ-1.spec.ts")
         self.assertTrue(tests["e2e:REQ-1"]["passed"])
-        self.assertEqual(tests["acceptance:REQ-1"]["type"], "acceptance")
+        self.assertEqual(tests["acceptance:REQ-1"]["type"], "e2e")
         self.assertTrue(tests["acceptance:REQ-1"]["file_path"].startswith("frontend/tests/e2e/acceptance/"))
         self.assertTrue(tests["acceptance:REQ-1"]["passed"])
         self.assertEqual(table(self.arc, "node_states")["REQ-1"]["state"], "PASSED")

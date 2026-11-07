@@ -97,8 +97,12 @@ def existence_suite(design: dict, pid: str) -> str:
             if shown:
                 if semantic_role:
                     lines.append(f"  await expect({locator}).toHaveRole({json.dumps(semantic_role)});")
-                if name:
+                if name and role != "page":
                     lines.append(f"  await expect({locator}).toHaveAccessibleName({json.dumps(name)});")
+                if role == "region" and name:
+                    count = sum(other.get("role") == role and other.get("name") == name
+                        and visible(design, other_id, state) for other_id, other in elements.items())
+                    lines.append(f"  await expect(page.getByRole(\"region\", {{ name: {json.dumps(name)}, exact: true }})).toHaveCount({count});")
                 prop = node.get("prop", {})
                 for key in ("text", "label"):
                     text = prop.get(key)
