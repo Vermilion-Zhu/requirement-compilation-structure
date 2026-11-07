@@ -60,7 +60,9 @@ convenient. A button role is a real button element (use the router's navigation 
 click when it also changes the route), a link role is an anchor with its href, a navigation
 role is a nav landmark around its links, and a region role is a landmark labelled with the
 declared name. Use element.name as the accessible name when present; otherwise the visible
-text is the name. data-testid serves tests only and never replaces a role or label.
+content may supply the name only when supported by that role. For an explicitly named
+status or alert, provide the required accessible name through aria-label or aria-labelledby.
+data-testid serves tests only and never replaces a role or label.
 Preserve every explicitly required UI name and role verbatim, including language, spelling
 and case. Do not rename "Name" to "Shelf name", translate captions, or combine aliases.
 Keep visible labels and computed accessible names consistent: associate labels correctly,

@@ -13,10 +13,10 @@ import unittest
 from unittest.mock import Mock, patch
 
 from infrastructure.shared.project import runtime_events
-from infrastructure.stages.passes.design_frontend_triggers import design_frontend_triggers
-from infrastructure.stages.passes.design_frontend_ui import design_frontend_ui
-from infrastructure.stages.passes.implement_frontend_triggers import implement_frontend_triggers
-from infrastructure.stages.passes.implement_frontend_ui import implement_frontend_ui
+from infrastructure.stages.passes.stage_11_design_frontend_triggers import design_frontend_triggers
+from infrastructure.stages.passes.stage_09_design_frontend_ui import design_frontend_ui
+from infrastructure.stages.passes.stage_12_implement_frontend_triggers import implement_frontend_triggers
+from infrastructure.stages.passes.stage_10_implement_frontend_ui import implement_frontend_ui
 from infrastructure.utils.files import save_json
 
 
@@ -141,9 +141,9 @@ class AdapterRows(TraceabilityTestCase):
 
 class PassHooks(TraceabilityTestCase):
     def test_design_and_implementation_publish_page_contract_and_ui_suite(self):
-        with patch("infrastructure.stages.passes.design_frontend_ui.TextModel"), \
-                patch("infrastructure.stages.passes.design_frontend_ui.DemoConsole"), \
-                patch("infrastructure.stages.passes.design_frontend_ui.synthesize_ui",
+        with patch("infrastructure.stages.passes.stage_09_design_frontend_ui.TextModel"), \
+                patch("infrastructure.stages.passes.stage_09_design_frontend_ui.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_09_design_frontend_ui.synthesize_ui",
                     return_value=json.loads(json.dumps(DESIGN))):
             design_frontend_ui(self.input, self.arc)
 
@@ -152,9 +152,9 @@ class PassHooks(TraceabilityTestCase):
         self.assertEqual(page["content"], "/ → UI-home")
 
         report = {"status": "GREEN", "pages": {"UI-home": {"status": "GREEN", "requirements": ["REQ-1"]}}}
-        with patch("infrastructure.stages.passes.implement_frontend_ui.TextModel"), \
-                patch("infrastructure.stages.passes.implement_frontend_ui.DemoConsole"), \
-                patch("infrastructure.stages.passes.implement_frontend_ui.implement_ui",
+        with patch("infrastructure.stages.passes.stage_10_implement_frontend_ui.TextModel"), \
+                patch("infrastructure.stages.passes.stage_10_implement_frontend_ui.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_10_implement_frontend_ui.implement_ui",
                     return_value=report):
             implement_frontend_ui(self.input, self.arc)
 
@@ -167,11 +167,11 @@ class PassHooks(TraceabilityTestCase):
     def test_trigger_design_publishes_contract_and_back_links_called_apis(self):
         runtime_events.interface("API-list", req_ids=["REQ-1"], kind="api",
             content="GET /api/items — List items")
-        with patch("infrastructure.stages.passes.design_frontend_triggers.TextModel"), \
-                patch("infrastructure.stages.passes.design_frontend_triggers.DemoConsole"), \
-                patch("infrastructure.stages.passes.design_frontend_triggers.load_ui_design",
+        with patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.TextModel"), \
+                patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.load_ui_design",
                     return_value=json.loads(json.dumps(DESIGN))), \
-                patch("infrastructure.stages.passes.design_frontend_triggers.synthesize_triggers",
+                patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.synthesize_triggers",
                     return_value=json.loads(json.dumps(INTERACTIONS))):
             design_frontend_triggers(self.input, self.arc)
 
@@ -191,13 +191,13 @@ class PassHooks(TraceabilityTestCase):
         process = {"status": "GREEN", "summary": {}, "requirements": {"REQ-1": {"status": "GREEN", "triggers": []}},
             "verification": {}}
         acceptance = {"status": "GREEN", "requirements": {"REQ-1": {"status": "GREEN"}}}
-        with patch("infrastructure.stages.passes.implement_frontend_triggers.load_e2e_context",
+        with patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.load_e2e_context",
                     return_value=context), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.TextModel"), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.DemoConsole"), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.run_trigger_tdd",
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.TextModel"), \
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.run_trigger_tdd",
                     return_value=process), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.run_independent_acceptance",
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.run_independent_acceptance",
                     return_value=acceptance):
             implement_frontend_triggers(self.input, self.arc)
 

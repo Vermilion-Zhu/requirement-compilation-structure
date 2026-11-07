@@ -14,7 +14,7 @@ Return one JSON object with four sibling keys: elements, pages, requirement_ui, 
 elements maps ELEMENT IDs to {type, role, name, scope, parent, mode, data, prop}. A page root
 has type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary
 types: container, form, input, checkbox, select, button, text, heading, link, list, item,
-image, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional;
+image, status, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional;
 scope is "global" for application chrome and "page" otherwise. mode is an array
 containing user_read and/or user_write, or [].
 
@@ -56,8 +56,12 @@ The request lists the current shell; keep it consistent across requirements.
 ACCESSIBILITY CONTRACT
 Declare role for every element. role states what the control is, independently of styling:
 page, main, region, navigation, heading, button, link, textbox, checkbox, combobox, list,
-listitem, form, img, alert, table, dialog, text or container.
-Choose role by behavior, not by destination:
+listitem, form, img, status, alert, table, dialog, text or container.
+Explicit original requirement roles and accessible names are authoritative. Apply the
+following defaults only where the requirement leaves that property unspecified. Preserve
+an explicit role even when a default below would suggest another role. An explicit
+accessible name must be recorded in name when the markup cannot derive it from content.
+For unspecified roles, choose by behavior:
 - A control that changes data or the current record/form, opens an editor or dialog, submits,
   saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
   activating it changes the route: an action is never modelled as a link.
@@ -65,10 +69,13 @@ Choose role by behavior, not by destination:
   navigation, breadcrumbs, links inside a list of records) is role link, and the container
   that groups them is role navigation.
 - A group of records or items is role region with an explicit name. Status and error
-  messages are role alert. A form is role form, and every input declares textbox, checkbox
+  messages use the explicit requirement role when supplied. For unspecified messages,
+  use status for routine feedback and alert for urgent messages requiring attention.
+  A form is role form, and every input declares textbox, checkbox
   or combobox and is labelled by its visible label.
 - A page root is role page; use container for ungrouped layout boxes.
-Declare name only when the accessible name differs from the visible text: icon-only controls,
+Preserve explicitly required accessible names. Otherwise declare name when it cannot be
+derived from the visible content: icon-only controls,
 icon-only regions, or a caption that is not rendered. Otherwise omit name and keep the
 visible wording exact. name never paraphrases, duplicates or decorates a label. When the
 original requirement states a role, that role wins over visual inference.
@@ -99,7 +106,7 @@ ROLE_BY_TYPE = {
     "page": "page", "container": "container", "form": "form", "input": "textbox",
     "checkbox": "checkbox", "select": "combobox", "button": "button", "link": "link",
     "text": "text", "heading": "heading", "list": "list", "item": "listitem",
-    "image": "img", "alert": "alert", "table": "table",
+    "image": "img", "status": "status", "alert": "alert", "table": "table",
 }
 ROLE_BY_INPUT_TYPE = {"checkbox": "checkbox", "radio": "radio", "number": "spinbutton"}
 # Only roles whose element implementation is unambiguous are constrained. Structural
@@ -108,7 +115,7 @@ ROLE_FAMILIES = {
     "page": {"page", "main"}, "form": {"form"},
     "input": {"textbox", "checkbox", "combobox", "spinbutton", "radio", "searchbox"},
     "checkbox": {"checkbox"}, "select": {"combobox"}, "button": {"button"},
-    "link": {"link"}, "heading": {"heading"}, "image": {"img"}, "alert": {"alert"},
+    "link": {"link"}, "heading": {"heading"}, "image": {"img"}, "status": {"status"}, "alert": {"alert"},
     "table": {"table"},
 }
 # Roles whose meaning depends on an accessible name the markup cannot derive from its text.
