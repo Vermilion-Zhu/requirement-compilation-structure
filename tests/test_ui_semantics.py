@@ -62,6 +62,15 @@ class Normalization(unittest.TestCase):
         self.tree = RequirementTree(deepcopy(TREE_DOCUMENT))
         self.design = normalize_design(deepcopy(DESIGN), self.tree)
 
+    def test_explicit_status_type_defaults_without_inventing_a_name(self):
+        design = deepcopy(DESIGN)
+        design["elements"]["UI-feedback"] = {
+            "type": "status", "parent": "UI-home", "prop": {"text": "Operation complete"},
+        }
+        feedback = normalize_design(design, self.tree)["elements"]["UI-feedback"]
+        self.assertEqual(feedback["role"], "status")
+        self.assertNotIn("name", feedback)
+
     def test_explicit_role_wins_over_type_default(self):
         for role in ("status", "alert", "button", "link"):
             with self.subTest(role=role):

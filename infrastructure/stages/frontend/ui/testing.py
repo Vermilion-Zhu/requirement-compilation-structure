@@ -13,10 +13,10 @@ import socket
 import subprocess
 import tempfile
 
-from infrastructure.stages.frontend.ui.design import data_symbols, page_elements, visible
+from infrastructure.stages.frontend.ui.design import data_symbols, page_elements, shell_elements, visible
 from infrastructure.utils.processes import capture_process, npm_command
 
-KEY_TYPES = {"page", "form", "input", "checkbox", "select", "button", "heading", "link", "list", "image", "alert", "table", "text"}
+KEY_TYPES = {"page", "form", "input", "checkbox", "select", "button", "heading", "link", "list", "image", "status", "alert", "table", "text"}
 
 
 def presentation_run_status(result):
@@ -39,7 +39,7 @@ def test_path(pid: str) -> str:
 def existence_suite(design: dict, pid: str) -> str:
     """Supply test-local display data; check controls and actual application data keys."""
     page = design["pages"][pid]
-    elements = page_elements(design, pid)
+    elements = {**shell_elements(design), **page_elements(design, pid)}
     variables = data_symbols(elements)
     empty_values = {"string": "", "integer": 0, "number": 0, "boolean": False,
         "array": [], "object": {}, "null": None}
@@ -86,11 +86,26 @@ def existence_suite(design: dict, pid: str) -> str:
         ])
         for uid, node in elements.items():
             kind = node.get("type", "page" if uid == page["root"] else "container")
-            if kind not in KEY_TYPES:
+            role = node.get("role")
+            name = node.get("name")
+            semantic_role = role if role not in {None, "page", "text", "container"} else None
+            if kind not in KEY_TYPES and not semantic_role and not name:
                 continue
             locator = f"page.getByTestId({json.dumps(uid)})"
             shown = visible(design, uid, state)
             lines.append(f"  await expect({locator}){'' if shown else '.not'}.toBeVisible();")
+            if shown:
+                if semantic_role:
+                    lines.append(f"  await expect({locator}).toHaveRole({json.dumps(semantic_role)});")
+                if name:
+                    lines.append(f"  await expect({locator}).toHaveAccessibleName({json.dumps(name)});")
+                prop = node.get("prop", {})
+                for key in ("text", "label"):
+                    text = prop.get(key)
+                    if isinstance(text, str) and text and kind not in {"input", "checkbox", "select"}:
+                        lines.append(f"  await expect({locator}).toContainText({json.dumps(text)});")
+                if kind in {"input", "checkbox", "select"} and isinstance(prop.get("label"), str) and not name:
+                    lines.append(f"  await expect({locator}).toHaveAccessibleName({json.dumps(prop['label'])});")
         lines.extend([
             '  await expect.poll(() => page.evaluate(({ pageId, keys }) => {',
             '    const state = (window as unknown as { __ARC_UI_DATA__?: { page: string; data: Record<string, unknown> } }).__ARC_UI_DATA__;',

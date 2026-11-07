@@ -55,24 +55,13 @@ input synchronization; no such host is generated.
 
 Render real layout, labels, controls and conditional content with original text and stable
 data-testid=ELEMENT_ID selectors. Use the installed dependencies and configured styles.
-Each element declares role and may declare name; render that role, not whichever tag seems
-convenient. A button role is a real button element (use the router's navigation call on
-click when it also changes the route), a link role is an anchor with its href, a navigation
-role is a nav landmark around its links, and a region role is a landmark labelled with the
-declared name. Use element.name as the accessible name when present; otherwise the visible
-content may supply the name only when supported by that role. For an explicitly named
-status or alert, provide the required accessible name through aria-label or aria-labelledby.
-data-testid serves tests only and never replaces a role or label.
-Preserve every explicitly required UI name and role verbatim, including language, spelling
-and case. Do not rename "Name" to "Shelf name", translate captions, or combine aliases.
-Keep visible labels and computed accessible names consistent: associate labels correctly,
-and do not override them with a different aria-label or concatenate unrelated text through
-aria-labelledby. Use exact placeholders only when the requirement specifies placeholders;
-an accessible field name alone does not prescribe a placeholder or HTML implementation.
-Apply this to buttons, links, headings and named regions as well as form fields. If the
-generated design or reference image conflicts with an explicit original UI contract, follow
-the original requirement and explain the discrepancy. Unspecified wording is an implementation
-choice; business object names still come from actual data, not reference examples.
+Render each declared role and accessible name. Follow explicit original requirements
+when they conflict with the design or reference image, and explain the discrepancy.
+Preserve required wording exactly. Choose markup and naming mechanisms that satisfy the
+browser's computed role and accessible name. Visible text alone does not supply a name
+for every role. Keep prop.text/prop.label visible and honor element.name when present.
+The presence suite checks the declared semantics on each data-testid element.
+Only use exact placeholders when required. Business record values come from actual data.
 This stage builds presentation, native editing and navigation, not business API operations,
 session restoration or later requirements' workflows. Step 12 adds those interactions.
 Keep one clear owner for each native form/navigation action. Later implementation must
@@ -81,8 +70,8 @@ extend that existing handler, not add another independently firing click/submit 
 Preserve the presentation-test adapter in frontend/src/ui-runtime.ts. Call presentationData
 with this page ID and a projection of the actual declared frontend values when rendering.
 It supplies display-test overrides and exposes actual data keys; it does not own your state.
-Do not copy display-test records into production initial values. If representative records
-are needed, arrange them only in the writable presence suite's __ARC_UI_TEST_DATA__ setup.
+The compiler regenerates presence suites from the current design. They are read-only during
+implementation repair. Keep test-local display overrides out of production initial values.
 
 The compiler compiles, runs current/accepted presence tests and builds; it never regenerates
 App, routes, handlers or stores. Repair relevant writable sources without removing previous
@@ -117,8 +106,7 @@ def implement_ui(arc_dir: Path, design: dict, model, console, report: dict, max_
         uses = owners(design, pid)
         relative = test_path(pid)
         suite = existence_suite(design, pid)
-        if not (output / relative).is_file():
-            save_text(output / relative, suite)
+        save_text(output / relative, suite)
         report["pages"][pid] = {"status": "TESTS_READY", "requirements": uses, "test_path": relative}
         save_json(arc_dir / "ui_checks.json", report)
         label = f"UI {number}/{len(design['pages'])} {pid}"

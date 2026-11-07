@@ -29,14 +29,17 @@ prop contains static text, label, placeholder, input_type, options, style, href,
 or heading level. Optional prop.visible is a boolean or {var:VARIABLE_NAME, equals:VALUE}.
 A status dependency controls visibility without requiring its raw value as display text.
 
-Treat explicit UI names and roles in the original requirement as interface contracts.
-Preserve required labels, action names, region names and placeholders verbatim, including
-language, spelling and case. Do not paraphrase, add object-type prefixes, translate or
-concatenate aliases: a required "Name" field must not become "Shelf name". Record the
-wording in the existing element.prop; do not create a separate naming registry.
-Explicit requirement wording takes precedence over visual-reference examples. Only choose
-wording freely when it is unspecified or alternatives are explicitly allowed. Business
-record names and user-entered values remain dynamic; example data is not fixed UI wording.
+Preserve explicit requirement roles, labels, placeholders and accessible names, including
+language, spelling and case. Defaults apply only to unspecified properties. Reference images and
+examples cannot override the original requirement. Business record values remain dynamic.
+Store visible wording in prop.text or prop.label. Store a required accessible name in name.
+Visible text and accessible name are separate properties. For status/alert feedback
+identified by specific message text in the requirement, default name to that message
+unless the requirement specifies a different name or explicitly leaves it unnamed. Keep
+this default name synchronized with the displayed message; exclude child action captions.
+For different messages under different conditions, declare separate elements with their
+own name, prop.text and prop.visible, using the existing fields. Do not invent an umbrella
+name for these messages. For other elements, choose names only where needed by the UI.
 
 APPLICATION SHELL
 The application has one shell: the header, primary navigation, footer and other chrome that
@@ -57,10 +60,6 @@ ACCESSIBILITY CONTRACT
 Declare role for every element. role states what the control is, independently of styling:
 page, main, region, navigation, heading, button, link, textbox, checkbox, combobox, list,
 listitem, form, img, status, alert, table, dialog, text or container.
-Explicit original requirement roles and accessible names are authoritative. Apply the
-following defaults only where the requirement leaves that property unspecified. Preserve
-an explicit role even when a default below would suggest another role. An explicit
-accessible name must be recorded in name when the markup cannot derive it from content.
 For unspecified roles, choose by behavior:
 - A control that changes data or the current record/form, opens an editor or dialog, submits,
   saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
@@ -68,17 +67,11 @@ For unspecified roles, choose by behavior:
 - A control that only reveals another content view inside the reading flow (primary
   navigation, breadcrumbs, links inside a list of records) is role link, and the container
   that groups them is role navigation.
-- A group of records or items is role region with an explicit name. Status and error
-  messages use the explicit requirement role when supplied. For unspecified messages,
+- Choose a list, group or named region according to the collection's purpose. For unspecified messages,
   use status for routine feedback and alert for urgent messages requiring attention.
   A form is role form, and every input declares textbox, checkbox
   or combobox and is labelled by its visible label.
 - A page root is role page; use container for ungrouped layout boxes.
-Preserve explicitly required accessible names. Otherwise declare name when it cannot be
-derived from the visible content: icon-only controls,
-icon-only regions, or a caption that is not rendered. Otherwise omit name and keep the
-visible wording exact. name never paraphrases, duplicates or decorates a label. When the
-original requirement states a role, that role wins over visual inference.
 
 pages maps PAGE IDs to {name, route, root, images}. route is a URL path, root is an
 ELEMENT ID and images lists supplied image IDs. Preserve explicit image.page hints.
