@@ -5,7 +5,6 @@ page-first: retrieval returns the corresponding UI/data subtree, not disconnecte
 components. Prompts and design records live in ui/design.py."""
 
 import json
-from copy import deepcopy
 
 from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, shell_context, UIResponseError, data_symbols, semantic_issues
 from infrastructure.stages.frontend.ui.proposals import INSTRUCTIONS as EXAMPLE_INSTRUCTIONS
@@ -42,50 +41,6 @@ def bind_requirement_image_pages(design, requirement, rid):
             if root not in owned:
                 owned.append(root)
     design["requirements"][rid] = owned
-
-
-REPAIR_INSTRUCTIONS = """The accepted UI design still violates the accessibility contract.
-Repair ONLY the listed elements and return {"elements": {ELEMENT_ID: complete record}}.
-Keep every element ID, parent, data declaration and visible label unchanged. Add the missing
-role, name or state that each issue describes. Do not return the whole design, do not create
-new elements and do not rename existing records.
-"""
-
-
-def repair_semantics(design, tree, model, console):
-    """Give the model one chance to repair design warnings the implementation would inherit."""
-    issues = semantic_issues(design)
-    if not issues:
-        return design
-    # Design-level warnings (for example a missing shell) name no element to repair.
-    affected = sorted({issue.split(":", 1)[0] for issue in issues} & set(design["elements"]))
-    if not affected:
-        print("[UI SEMANTICS] design-level issues need no element repair", flush=True)
-        return design
-    print(f"[UI SEMANTICS] {len(issues)} issue(s) need repair", flush=True)
-    request = {"issues": issues, "elements": {
-        uid: deepcopy(design["elements"][uid]) for uid in affected}}
-
-    def accept(proposal):
-        elements = proposal.get("elements") if isinstance(proposal, dict) else None
-        if not isinstance(elements, dict) or not elements:
-            raise UIResponseError(ValueError("elements"), proposal)
-        updated = deepcopy(design)
-        for uid, node in elements.items():
-            if uid in updated["elements"] and isinstance(node, dict):
-                updated["elements"][uid] = deepcopy(node)
-        normalize_design(updated, tree)
-        return updated
-
-    try:
-        updated, _ = propose_json(model, REPAIR_INSTRUCTIONS, request, accept, console,
-            "UI semantics repair", 2)
-    except (RuntimeError, ValueError) as error:
-        print(f"[UI SEMANTICS] repair round skipped: {error}", flush=True)
-        return design
-    remaining = semantic_issues(updated)
-    print(f"[UI SEMANTICS] repaired {len(issues) - len(remaining)} of {len(issues)} issue(s)", flush=True)
-    return updated
 
 
 def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_attempts=10):
@@ -134,7 +89,6 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
             save_json(arc_dir / "ui_design.json", design)
             console.artifact("ui_design", design, label + " | Accepted UI")
     failures.finish()
-    design = repair_semantics(design, tree, model, console)
     normalize_design(design, tree)
     roles = {}
     for node in design["elements"].values():

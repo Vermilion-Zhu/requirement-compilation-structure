@@ -11,12 +11,12 @@ production initial values, example runtime objects or display fixtures.
 
 OUTPUT CONTRACT
 Return one JSON object with four sibling keys: elements, pages, requirement_ui, step_ui.
-elements maps ELEMENT IDs to {type, role, name, state, scope, parent, mode, data, prop}. A page
-root has type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use
-ordinary types: container, form, input, checkbox, select, button, text, heading, link, list,
-item, image, alert, status or table. role is required (see ACCESSIBILITY CONTRACT); name is
-optional; state maps ARIA states to their data binding; scope is "global" for application
-chrome and "page" otherwise. mode is an array containing user_read and/or user_write, or [].
+elements maps ELEMENT IDs to {type, role, name, scope, parent, mode, data, prop}. A page root
+has type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary
+types: container, form, input, checkbox, select, button, text, heading, link, list, item,
+image, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional;
+scope is "global" for application chrome and "page" otherwise. mode is an array
+containing user_read and/or user_write, or [].
 
 data is an array of variable declarations: {var, dtype, constraints}.
 var is the frontend variable name; dtype is string, integer, number, boolean, array,
@@ -56,7 +56,7 @@ The request lists the current shell; keep it consistent across requirements.
 ACCESSIBILITY CONTRACT
 Declare role for every element. role states what the control is, independently of styling:
 page, main, region, navigation, heading, button, link, textbox, checkbox, combobox, list,
-listitem, form, img, alert, status, table, dialog, text or container.
+listitem, form, img, alert, table, dialog, text or container.
 Choose role by behavior, not by destination:
 - A control that changes data or the current record/form, opens an editor or dialog, submits,
   saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
@@ -64,22 +64,14 @@ Choose role by behavior, not by destination:
 - A control that only reveals another content view inside the reading flow (primary
   navigation, breadcrumbs, links inside a list of records) is role link, and the container
   that groups them is role navigation.
-- A group of records or items is role region with an explicit name. Success and
-  informational notices are role status; errors and interruption warnings are role alert.
-  A form is role form, and every input declares textbox, checkbox or combobox and is
-  labelled by its visible label.
+- A group of records or items is role region with an explicit name. Status and error
+  messages are role alert. A form is role form, and every input declares textbox, checkbox
+  or combobox and is labelled by its visible label.
 - A page root is role page; use container for ungrouped layout boxes.
-A requirement that states a role verbatim wins over the heuristics above: use exactly that
-role even when the visual reference or another rule suggests otherwise. A requirement that
-states an ARIA state (for example pressed, current, expanded, selected, checked) must be
-recorded in element.state even when the styling does not show it; do not leave a stated
-state to the implementation's discretion.
 Declare name only when the accessible name differs from the visible text: icon-only controls,
 icon-only regions, or a caption that is not rendered. Otherwise omit name and keep the
-visible wording exact. name never paraphrases, duplicates or decorates a label. name and
-prop.label are templates: write {var} for a value supplied by the current record (for
-example {note.title}); the implementation substitutes the real value on every render.
-When the original requirement states a role, that role wins over visual inference.
+visible wording exact. name never paraphrases, duplicates or decorates a label. When the
+original requirement states a role, that role wins over visual inference.
 
 pages maps PAGE IDs to {name, route, root, images}. route is a URL path, root is an
 ELEMENT ID and images lists supplied image IDs. Preserve explicit image.page hints.
@@ -107,7 +99,7 @@ ROLE_BY_TYPE = {
     "page": "page", "container": "container", "form": "form", "input": "textbox",
     "checkbox": "checkbox", "select": "combobox", "button": "button", "link": "link",
     "text": "text", "heading": "heading", "list": "list", "item": "listitem",
-    "image": "img", "alert": "alert", "status": "status", "table": "table",
+    "image": "img", "alert": "alert", "table": "table",
 }
 ROLE_BY_INPUT_TYPE = {"checkbox": "checkbox", "radio": "radio", "number": "spinbutton"}
 # Only roles whose element implementation is unambiguous are constrained. Structural
@@ -117,13 +109,11 @@ ROLE_FAMILIES = {
     "input": {"textbox", "checkbox", "combobox", "spinbutton", "radio", "searchbox"},
     "checkbox": {"checkbox"}, "select": {"combobox"}, "button": {"button"},
     "link": {"link"}, "heading": {"heading"}, "image": {"img"}, "alert": {"alert"},
-    "status": {"status"}, "table": {"table"},
+    "table": {"table"},
 }
 # Roles whose meaning depends on an accessible name the markup cannot derive from its text.
 NAMED_ROLES = {"region", "navigation"}
 SCOPES = {"page", "global"}
-# ARIA states a design may bind to data; the implementation renders them as aria-* attributes.
-ARIA_STATES = {"pressed", "current", "expanded", "selected", "checked", "disabled", "busy", "invalid"}
 
 
 def derived_role(node: dict) -> str:
@@ -217,21 +207,6 @@ def normalize_design(design, tree):
             node.pop("name", None)
         scope = str(node.get("scope") or "").strip().lower()
         node["scope"] = scope if scope in SCOPES else "page"
-        state = node.get("state")
-        if isinstance(state, dict):
-            cleaned = {}
-            for key, value in state.items():
-                if not isinstance(key, str):
-                    continue
-                attribute = key.strip().lower().removeprefix("aria-")
-                if attribute in ARIA_STATES:
-                    cleaned[attribute] = value
-            if cleaned:
-                node["state"] = cleaned
-            else:
-                node.pop("state", None)
-        else:
-            node.pop("state", None)
     inherit_global_scope(design)
     for kind, expected in (("requirements", tree.requirements), ("steps", tree.steps)):
         for identity in expected:
@@ -268,7 +243,7 @@ def shell_context(design: dict) -> dict:
 
 
 def semantic_issues(design: dict) -> list[str]:
-    """Report roles, names or states that cannot be rendered as declared."""
+    """Report roles that contradict their element type or lack a required name."""
     issues = []
     for uid, node in design["elements"].items():
         kind = str(node.get("type") or "").strip().lower()
@@ -281,16 +256,6 @@ def semantic_issues(design: dict) -> list[str]:
         label = (node.get("prop") or {}).get("label")
         if role in NAMED_ROLES and not (node.get("name") or label):
             issues.append(f"{uid}: {role} needs an accessible name")
-        state = node.get("state")
-        if state is not None and not isinstance(state, dict):
-            issues.append(f"{uid}: state must map ARIA states to data bindings")
-        elif isinstance(state, dict):
-            for key, value in state.items():
-                if str(key).strip().lower() not in ARIA_STATES:
-                    issues.append(f"{uid}: unknown ARIA state {key!r}")
-                elif not (isinstance(value, bool)
-                        or (isinstance(value, dict) and isinstance(value.get("var"), str))):
-                    issues.append(f"{uid}: state {key!r} needs a boolean or a variable rule")
         if node.get("scope") == "global":
             parent = design["elements"].get(node.get("parent")) if isinstance(node.get("parent"), str) else None
             if parent is not None and parent.get("scope") != "global":

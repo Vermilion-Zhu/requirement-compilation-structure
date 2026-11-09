@@ -81,9 +81,6 @@ check the required business outcome. Count only that operation, not page-entry r
 unrelated calls, or retries/repeated operations explicitly required by the requirement.
 Install request observation before the action; synchronize with its response and visible
 completion. Do not add fixed sleeps or assert all application requests have count one.
-Bound every wait explicitly: pass a 5-8 second timeout to waitForResponse, waitForURL and
-any assertion that waits for a request, navigation or route change. Do not rely on the
-30 second test timeout; a missing request must fail fast so repair can react.
 
 Use edit_file to create the .spec.ts target under frontend/tests/e2e using task.file_target or update test_path. Import test and
 expect from frontend/tests/e2e/support/context.ts with a relative .js import. Tests use

@@ -19,9 +19,6 @@ from infrastructure.stages.database.runtime import seed_source
 
 SEED_PATH = "backend/src/db/seed.ts"
 
-# Modules the database runtime needs before it can compile and start the app.
-DEPENDENCY_PROBES = ("tsx", "typescript", "better-sqlite3", "express")
-
 WIRING = (
     "backend/src/db/client.ts", "backend/src/db/initialize.ts", "backend/src/db/setup.ts",
     SEED_PATH,
@@ -166,41 +163,21 @@ starts/restarts the compiled backend and initializes backend/data/app.db after e
 '''
 
 
-def ensure_database_dependencies(output, state: dict) -> None:
-    """Install dependencies once per manifest; a repeated failure is reported, not retried.
-
-    An npm failure is usually a manifest problem (for example a version the registry does
-    not serve), so retrying the same manifest on every repair round only multiplies a slow
-    install. The second attempt raises the recorded message, which now carries the npm tail.
-    """
-    current = [(output / name).read_text(encoding="utf-8-sig")
-        for name in ("package.json", "backend/package.json")]
-    needed = state.get("manifest") != current or any(
-        not (output / "node_modules" / name).exists() for name in DEPENDENCY_PROBES)
-    if not needed:
-        return
-    key = tuple(current)
-    failures = state.setdefault("failures", {})
-    if key in failures:
-        raise RuntimeError(failures[key])
-    try:
-        install_dependencies(output)
-    except RuntimeError as error:
-        failures[key] = str(error)
-        raise
-    state["manifest"] = current
-
-
 def verify_database_runtime(arc_dir, schema, model, console, max_turns=20):
     output = arc_dir.parent.resolve()
     report = {"status": "CHECKING", "expected_tables": list(schema["entities"]), "repair_turns": 0}
     path = arc_dir / "db_checks.json"
     save_json(path, report)
     checks = DatabaseChecks(output, schema)
-    install_state = {"manifest": None, "failures": {}}
+    manifest = None
 
     def gate():
-        ensure_database_dependencies(output, install_state)
+        nonlocal manifest
+        current = [(output / name).read_text(encoding="utf-8-sig") for name in ("package.json", "backend/package.json")]
+        dependencies = ("tsx", "typescript", "better-sqlite3", "express")
+        if (manifest is not None and current != manifest) or any(not (output / "node_modules" / name).exists() for name in dependencies):
+            install_dependencies(output)
+        manifest = current
         result = checks.run()
         report.update(status="GREEN" if result["returncode"] == 0 else "FAILED", checks=result)
         save_json(path, report)

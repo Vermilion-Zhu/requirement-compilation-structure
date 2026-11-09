@@ -113,9 +113,9 @@
 
 ## 6. 里程碑计划（按批次顺序实现）
 
-### 批次 1：先消除波动（低风险，1 天）✅ 2026-11-09 已完成，待下一次运行验证
+### 批次 1：先消除波动（低风险，1 天）
 
-#### M1 依赖安装可复现、可诊断 ✅
+#### M1 依赖安装可复现、可诊断
 
 - **目标**：消除 ETARGET 类 762 s 浪费；安装失败一次即停、信息可读。
 - **改动**：
@@ -124,20 +124,15 @@
   3. `database/implementation.py` 的 gate 记住"已尝试的 manifest"（失败也记住），本 pass 内不重试；
   4. 安装前比较 manifest 摘要 + `node_modules` 关键依赖，未变化则跳过。
 - **验收**：一次运行 `install_calls ≤ 4`、无 ETARGET、阶段 05 < 120 s。
-- **已完成**：模板 tailwind 锁到已验证可用的 `4.3.4`；`install_dependencies` 失败信息带 npm 尾部；
-  `ensure_database_dependencies` 同一 manifest 失败只报一次、不再重跑安装。
-  单测：`tests/test_dependencies.py`（版本锁定、失败尾部、重试抑制）。
 - **风险**：锁版本与镜像不一致 → 用两次安装验证后再定版本。
 - **关联**：TA 02D/05C；轨道 A。
 
-#### M2 E2E 等待预算 ✅
+#### M2 E2E 等待预算
 
 - **目标**：失败用例从 30 s 降到 5–8 s，减少阶段 12 墙钟与反馈延迟。
 - **改动**：阶段 12 的测试生成提示词要求 `waitForResponse`/关键 locator 显式 5–8 s 超时；
   配置中仍保留 30 s 测试总超时兜底。
 - **验收**：失败 spec ≤ 12 s；E2E 总时长下降 ≥ 30%。
-- **已完成**：功能 E2E 与独立验收的生成提示词都要求 5–8 s 显式超时（`waitForResponse`/路由/断言），
-  不再依赖 30 s 测试超时；单测：`tests/test_wait_budget.py`。
 - **风险**：慢环境误报 → 8 s 起步，可调。
 - **关联**：轨道 B。
 
@@ -156,7 +151,7 @@
 - **风险**：动态 URL/封装请求造成误报 → 宽松匹配 + 白名单。
 - **关联**：TA 06B、02D；轨道 A（后端）+ C（前端）。
 
-#### M4 语义 IR 补齐（C6 的正面修复）✅ 2026-11-09 已完成，待 keep 复跑验证
+#### M4 语义 IR 补齐（C6 的正面修复）
 
 - **目标**：需求里显式写出的 role/aria 状态不丢失。
 - **改动**：
@@ -166,11 +161,6 @@
      `name` 支持 `{var}` 模板（动态区域名）；
   3. `semantic_issues` 非空时进入一次修复回合（不再只打印）。
 - **验收**：keep 类任务外部 11/11（若失败确在 status/pressed）；设计告警为 0；alert/status 分布正确。
-- **已完成**：提示词区分 `status`（成功/提示）与 `alert`（错误/中断），并把"需求显式 role / ARIA 状态优先"
-  写进 ACCESSIBILITY CONTRACT；元素新增 `state`（pressed/current/expanded/selected/checked 等，绑定变量或条件）；
-  `name`/`prop.label` 支持 `{var}` 模板；设计结束的语义告警改为**一次修复回合**（`repair_semantics`），
-  设计级告警（如缺壳）不触发表单修复；实现提示词要求把 `state` 渲染为 aria-* 属性并替换模板。
-  单测：`tests/test_ui_semantics.py` 扩展到 25 条（状态绑定、模板、校验、修复回合）。
 - **风险**：提示词影响其他任务 → 下一轮对比 bookstack + keep 两次运行。
 - **关联**：TA 03A/03C；轨道 B。
 
@@ -257,9 +247,9 @@
 | D1 账本在无前端证据时过早 `RESOLVED`（第 11 阶段即 103/103） | 待修：`Implemented` 需要前端证据或明确"无 UI" |
 | 壳上的交互（登录/退出等）未进入 trigger 设计 | 待设计：壳元素纳入 trigger 范围 |
 | 内部测试仍只断言 testid | 暂缓（M4 之后） |
-| `install_dependencies` 失败重试 | ✅ M1 已修（同一 manifest 不重试） |
-| 语义告警只打印不修复 | ✅ M4 已修（一次修复回合） |
-| 动态 name（`{title}`）无法表达 | ✅ M4 已修（`{var}` 模板） |
+| `install_dependencies` 失败重试 | M1 |
+| 语义告警只打印不修复 | M4 |
+| 动态 name（`{title}`）无法表达 | M4 |
 | keep 的 3 条外部失败未与平台清单对照 | 待补 |
 
 ## 10. 运行记录（append-only）
