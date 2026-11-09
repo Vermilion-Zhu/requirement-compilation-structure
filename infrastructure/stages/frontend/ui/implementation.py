@@ -60,10 +60,6 @@ when they conflict with the design or reference image, and explain the discrepan
 Preserve required wording exactly. Choose markup and naming mechanisms that satisfy the
 browser's computed role and accessible name. Visible text alone does not supply a name
 for every role. Keep prop.text/prop.label visible and honor element.name when present.
-The internal role "page" denotes a layout boundary. Its name is page metadata, not an
-instruction to create a named region. Use an ordinary layout wrapper by default. When the
-original requirement specifies an actual landmark, preserve that role and name. Render each
-declared region once; a page title shared with a collection does not declare another region.
 The presence suite checks the declared semantics on each data-testid element.
 Only use exact placeholders when required. Business record values come from actual data.
 This stage builds presentation, native editing and navigation, not business API operations,

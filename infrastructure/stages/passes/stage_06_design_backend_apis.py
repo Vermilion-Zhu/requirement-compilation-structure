@@ -203,7 +203,10 @@ def design_backend_apis(arc_dir: Path, pause: bool = False, top_k: int = 6, max_
                     req_ids=sorted(key for key, values in design["requirements"].items() if api_id in values),
                     kind="api",
                     content=f"{signature.get('method', '')} {signature.get('path', '')} — "
-                        f"{p.get('description', '')}".strip(" —"))
+                        f"{p.get('description', '')}".strip(" —"),
+                    callees=sorted({"DB-" + field.split(".", 1)[0]
+                        for field in [*p.get("read", []), *p.get("write", [])]
+                        if field.split(".", 1)[0] in schema["entities"]}))
             console.artifact("backend_apis", design, f"{label} | Accepted APIs")
     for requirement_id, entry in failures.report["tasks"].items():
         if entry["status"] == "FAILED":

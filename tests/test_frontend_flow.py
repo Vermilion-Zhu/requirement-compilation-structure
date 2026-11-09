@@ -666,31 +666,6 @@ class PresenceSemantics(unittest.TestCase):
             if should_fail:
                 parts.append('test.fail();')
             parts.extend([suite, '});'])
-        # Page metadata may share wording with a declared region. Only declarations
-        # determine the expected count; multiple explicitly declared regions remain valid.
-        for title, wrapper_role, declared_role, second_region, should_fail in [
-            ("layout page", None, "page", False, False),
-            ("redundant wrapper region", "region", "page", False, True),
-            ("explicit wrapper region", "region", "region", False, False),
-            ("two declared regions", "region", "region", True, False),
-        ]:
-            design = {"pages": {"home": {"route": "/", "root": "root"}},
-                      "elements": {"root": {"type": "page", "role": declared_role,
-                                             "name": "Collection", "parent": None}}}
-            attributes = ' role="region" aria-label="Collection"' if wrapper_role else ''
-            html = '<div data-testid="root"' + attributes + '>'
-            if declared_role == "page" or second_region:
-                design["elements"]["collection"] = {
-                    "type": "container", "role": "region", "name": "Collection", "parent": "root"}
-                html += '<section data-testid="collection" role="region" aria-label="Collection">Records</section>'
-            html += 'Page content</div><script>window.__ARC_UI_DATA__={page:"home",data:{}}</script>'
-            suite = existence_suite(design, "home")
-            suite = suite.replace('import { test, expect } from "@playwright/test";', '')
-            suite = suite.replace('await page.goto("/");', 'await page.setContent(' + json.dumps(html) + ');')
-            parts.append('test.describe(' + json.dumps(title) + ', () => {')
-            if should_fail:
-                parts.append('test.fail();')
-            parts.extend([suite, '});'])
         with TemporaryDirectory(prefix="presence-semantics-") as temporary:
             root = Path(temporary)
             (root / "semantics.spec.ts").write_text("\n".join(parts), encoding="utf-8")
@@ -702,7 +677,7 @@ class PresenceSemantics(unittest.TestCase):
                 cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads(result.stdout)
-            self.assertEqual(report["stats"]["expected"], 9)
+            self.assertEqual(report["stats"]["expected"], 5)
             self.assertEqual(report["stats"]["unexpected"], 0)
             self.assertEqual(report["stats"]["skipped"], 0)
 

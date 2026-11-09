@@ -85,6 +85,25 @@ class TraceabilityTestCase(unittest.TestCase):
 
 
 class AdapterRows(TraceabilityTestCase):
+    def test_all_seven_graph_regions_have_typed_evidence(self):
+        runtime_events.database_schema({
+            "entities": {"Note": {"fields": {"id": {"type": "string"}}}},
+            "requirements": {"REQ-1": ["Note.id"]}})
+        runtime_events.interface_implemented("DB-Note", "backend/src/db/tables/Note.sql")
+        for identity, kind in [("UI-home", "page"), ("API-list", "api"), ("TR-open", "trigger")]:
+            runtime_events.interface(identity, req_ids=["REQ-1"], kind=kind, content=identity)
+        for identity, kind in [("ui:home", "ui"), ("api:list", "api"),
+                               ("e2e:home", "e2e"), ("acceptance:home", "acceptance")]:
+            runtime_events.test_case(identity, requirement_id="REQ-1", kind=kind, passed=True)
+        interfaces = table(self.arc, "interfaces")
+        self.assertEqual({r["type"] for r in interfaces.values()}, {"ui", "api", "func", "db"})
+        self.assertEqual({r["type"] for r in table(self.arc, "tests").values()},
+                         {"unit", "integration", "e2e"})
+        self.assertEqual(interfaces["DB-Note"]["req_ids"], ["REQ-1"])
+        self.assertTrue(interfaces["DB-Note"]["implemented"])
+        self.assertEqual(interfaces["DB-Note"]["file_path"], "backend/src/db/tables/Note.sql")
+
+
     def test_interface_rows_keep_owners_content_and_links(self):
         runtime_events.interface("API-a", req_ids=["REQ-1", "REQ-2"], kind="api",
             content="GET /api/a — first", callers=["TR-1"])
@@ -140,6 +159,20 @@ class AdapterRows(TraceabilityTestCase):
 
 
 class PassHooks(TraceabilityTestCase):
+    def test_schema_pass_registers_real_table_definitions(self):
+        from infrastructure.stages.passes import load_pass
+        module = load_pass("02_build_db_schema")
+        schema = {"entities": {"Note": {"fields": {"id": {"type": "string"}}}},
+                  "requirements": {"REQ-1": ["Note.id"]}}
+        with patch.object(module, "TextModel"), patch.object(module, "DemoConsole"), \
+                patch.object(module, "propose_json", return_value=((schema, "accepted"), {})):
+            module.build_db_schema(self.arc)
+        row = table(self.arc, "interfaces")["DB-Note"]
+        self.assertEqual(row["type"], "db")
+        self.assertEqual(row["req_ids"], ["REQ-1"])
+        self.assertFalse(row["implemented"])
+
+
     def test_design_and_implementation_publish_page_contract_and_ui_suite(self):
         with patch("infrastructure.stages.passes.stage_09_design_frontend_ui.TextModel"), \
                 patch("infrastructure.stages.passes.stage_09_design_frontend_ui.DemoConsole"), \
@@ -176,7 +209,7 @@ class PassHooks(TraceabilityTestCase):
             design_frontend_triggers(self.input, self.arc)
 
         trigger = table(self.arc, "interfaces")["TR-open"]
-        self.assertEqual((trigger["type"], trigger["req_ids"]), ("trigger", ["REQ-1"]))
+        self.assertEqual((trigger["type"], trigger["req_ids"]), ("func", ["REQ-1"]))
         self.assertEqual(trigger["content"], "UI-home.click → API-list")
         self.assertEqual(trigger["callees"], ["API-list"])
         self.assertEqual(table(self.arc, "interfaces")["API-list"]["callers"], ["TR-open"])
@@ -188,7 +221,8 @@ class PassHooks(TraceabilityTestCase):
         tree.leaves = ["REQ-1"]
         context = (tree, {"entities": {}}, {"apis": {}, "requirements": {}},
             json.loads(json.dumps(DESIGN)), {"triggers": {}, "requirements": {}}, {}, {})
-        process = {"status": "GREEN", "summary": {}, "requirements": {"REQ-1": {"status": "GREEN", "triggers": []}},
+        runtime_events.interface("TR-open", req_ids=["REQ-1"], kind="trigger", content="open")
+        process = {"status": "GREEN", "summary": {}, "requirements": {"REQ-1": {"status": "GREEN", "triggers": ["TR-open"]}},
             "verification": {}}
         acceptance = {"status": "GREEN", "requirements": {"REQ-1": {"status": "GREEN"}}}
         with patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.load_e2e_context",
@@ -205,6 +239,8 @@ class PassHooks(TraceabilityTestCase):
         self.assertEqual(tests["e2e:REQ-1"]["type"], "e2e")
         self.assertEqual(tests["e2e:REQ-1"]["file_path"], "frontend/tests/e2e/REQ-1.spec.ts")
         self.assertTrue(tests["e2e:REQ-1"]["passed"])
+        self.assertEqual(tests["e2e:REQ-1"]["interface_ids"], ["TR-open"])
+        self.assertTrue(table(self.arc, "interfaces")["TR-open"]["implemented"])
         self.assertEqual(tests["acceptance:REQ-1"]["type"], "e2e")
         self.assertTrue(tests["acceptance:REQ-1"]["file_path"].startswith("frontend/tests/e2e/acceptance/"))
         self.assertTrue(tests["acceptance:REQ-1"]["passed"])

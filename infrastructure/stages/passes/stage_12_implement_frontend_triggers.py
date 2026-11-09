@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from infrastructure.shared.project.entrypoints import selected_path
+
 from infrastructure.stages.frontend.triggers.context import load_e2e_context
 from infrastructure.stages.frontend.triggers.e2e_runtime import stop_e2e_servers
 from infrastructure.stages.frontend.triggers.implementation import run_trigger_tdd, verify_frontend
@@ -33,7 +35,8 @@ def implement_frontend_triggers(input_dir: Path, arc_dir: Path, pause: bool = Fa
             passed = entry.get("status") in {"GREEN", "NO_TRIGGERS", "NO_DIRECT_TRIGGERS"}
             runtime_events.test_result(requirement_id, passed)
             runtime_events.test_case(f"e2e:{requirement_id}", requirement_id=requirement_id,
-                kind="e2e", file_path=test_path(requirement_id, arc_dir.parent), passed=passed)
+                kind="e2e", file_path=test_path(requirement_id, arc_dir.parent), passed=passed,
+                interface_ids=entry.get("triggers", []))
         acceptance = run_independent_acceptance(input_dir, arc_dir, schema, backend, ui, interactions,
             model, DemoConsole(pause), max_turns, process_report=result)
         if any(entry.get("repair_checks") for entry in acceptance["requirements"].values()):
@@ -48,6 +51,12 @@ def implement_frontend_triggers(input_dir: Path, arc_dir: Path, pause: bool = Fa
                 passed=accepted, scenario_id=None)
         if acceptance["status"] != "GREEN":
             result["status"] = "COMPLETED_WITH_FAILURES"
+        # Use the final process report so acceptance repairs can recover trigger status.
+        for entry in result.get("requirements", {}).values():
+            if entry.get("status") == "GREEN":
+                for trigger_id in entry.get("triggers", []):
+                    runtime_events.interface_implemented(trigger_id,
+                        selected_path(arc_dir.parent, "trigger", trigger_id))
         save_json(arc_dir / "frontend_e2e.json", result)
         print(f"Frontend functional smoke {result['status']}: {result['summary']}\nReport: {arc_dir / 'frontend_e2e.json'}", flush=True)
         return result

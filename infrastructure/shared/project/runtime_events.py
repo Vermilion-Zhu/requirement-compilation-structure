@@ -10,6 +10,7 @@ a no-op and warns at most once.
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 from infrastructure.shared.project.runtime_sdk import load_agent_runtime
@@ -136,7 +137,7 @@ def interface(interface_id: str, *, req_ids, kind: str, content: str,
         return
     try:
         store.upsert_interface(interface_id=interface_id, req_ids=list(req_ids),
-            type={"page": "ui"}.get(kind, kind),
+            type={"page": "ui", "trigger": "func"}.get(kind, kind),
             content=content, file_path=file_path, implemented=False,
             callers=list(callers), callees=list(callees))
     except Exception as error:
@@ -210,3 +211,15 @@ def test_passed(test_id: str, passed: bool) -> None:
 def commit(revision: str, message: str | None = None) -> None:
     """Ask the website to refresh its commit history after a checkpoint."""
     _emit_events("notify_commit_history_changed", message or f"checkpoint {revision[:8]}")
+
+
+def database_schema(schema: dict) -> None:
+    """Project accepted table definitions and their requirement ownership into DB nodes."""
+    if not enabled():
+        return
+    for name, entity in schema.get("entities", {}).items():
+        owners = [rid for rid, fields in schema.get("requirements", {}).items()
+                  if any(field.split(".", 1)[0] == name for field in fields)]
+        interface("DB-" + name, req_ids=owners, kind="db",
+            content=json.dumps(entity, ensure_ascii=False),
+            file_path=f"backend/src/db/tables/{name}.sql")
