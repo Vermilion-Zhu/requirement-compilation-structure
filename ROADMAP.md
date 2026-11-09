@@ -156,7 +156,7 @@
 - **风险**：动态 URL/封装请求造成误报 → 宽松匹配 + 白名单。
 - **关联**：TA 06B、02D；轨道 A（后端）+ C（前端）。
 
-#### M4 语义 IR 补齐（C6 的正面修复）
+#### M4 语义 IR 补齐（C6 的正面修复）✅ 2026-11-09 已完成，待 keep 复跑验证
 
 - **目标**：需求里显式写出的 role/aria 状态不丢失。
 - **改动**：
@@ -166,6 +166,11 @@
      `name` 支持 `{var}` 模板（动态区域名）；
   3. `semantic_issues` 非空时进入一次修复回合（不再只打印）。
 - **验收**：keep 类任务外部 11/11（若失败确在 status/pressed）；设计告警为 0；alert/status 分布正确。
+- **已完成**：提示词区分 `status`（成功/提示）与 `alert`（错误/中断），并把"需求显式 role / ARIA 状态优先"
+  写进 ACCESSIBILITY CONTRACT；元素新增 `state`（pressed/current/expanded/selected/checked 等，绑定变量或条件）；
+  `name`/`prop.label` 支持 `{var}` 模板；设计结束的语义告警改为**一次修复回合**（`repair_semantics`），
+  设计级告警（如缺壳）不触发表单修复；实现提示词要求把 `state` 渲染为 aria-* 属性并替换模板。
+  单测：`tests/test_ui_semantics.py` 扩展到 25 条（状态绑定、模板、校验、修复回合）。
 - **风险**：提示词影响其他任务 → 下一轮对比 bookstack + keep 两次运行。
 - **关联**：TA 03A/03C；轨道 B。
 
@@ -253,8 +258,8 @@
 | 壳上的交互（登录/退出等）未进入 trigger 设计 | 待设计：壳元素纳入 trigger 范围 |
 | 内部测试仍只断言 testid | 暂缓（M4 之后） |
 | `install_dependencies` 失败重试 | ✅ M1 已修（同一 manifest 不重试） |
-| 语义告警只打印不修复 | M4 |
-| 动态 name（`{title}`）无法表达 | M4 |
+| 语义告警只打印不修复 | ✅ M4 已修（一次修复回合） |
+| 动态 name（`{title}`）无法表达 | ✅ M4 已修（`{var}` 模板） |
 | keep 的 3 条外部失败未与平台清单对照 | 待补 |
 
 ## 10. 运行记录（append-only）
