@@ -62,6 +62,13 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
+### 2.7 第七轮：M1 依赖可复现与 M2 等待预算
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **依赖漂移** | 模板 `tailwindcss: "^4.0.0"` 在平台镜像解析到 4.3.5，而 `@tailwindcss/oxide@4.3.5` 不存在：6 次 ETARGET、5 次安装失败、阶段 05 762 s、12 轮编辑 | 模板锁定到已验证的 `4.3.4`（含 `@tailwindcss/vite`）；`install_dependencies` 失败信息附 npm 输出尾部；新增 `ensure_database_dependencies`：同一 manifest 失败只报一次，不再重跑 npm；manifest 变化才重试 |
+| **E2E 失败成本** | 失败 spec 63–64 s（2 条用例 × 30 s 测试超时） | 功能 E2E 与独立验收的生成提示词要求 `waitForResponse`/路由/关键断言使用 5–8 s 显式超时，缺失请求快速失败，30 s 仅作兜底 |
+
 ### 2.6 第六轮：全局壳（Application Shell）
 
 | 项 | 问题 | 改动 |
@@ -82,7 +89,7 @@
 | **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
 | **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
 
-测试现状：`266 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`277 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -152,6 +159,8 @@ uv run python scripts\package.py -o compiler.zip
 - **E2E 复用已用真实产物本地复现验证**：冷启动 4.27 s → 复用 3.05 s（同一条 spec、同为 2 passed），强制回退 5.03 s，三次输出均可解析且无任何 [e2e] 行。
 - **全局壳已落地**：旧产物在新规则下会报"several pages share no global shell"，说明壳缺口可被设计阶段识别；
   `tests/test_ui_shell.py` 18 条覆盖 scope 继承、壳投影、页面/壳分离与提示词通用性。
+- **M1/M2 已落地**：模板依赖全部精确版本；安装失败带 npm 尾部且同一 manifest 不重试；
+  E2E 生成提示词加入 5–8 s 等待预算（`tests/test_dependencies.py`、`tests/test_wait_budget.py`）。
 - **语义 IR 已落地**：旧产物规范化后得到 button=12/link=9/navigation=0 的分布，印证"规范化只是兜底，
   语义要靠新提示词重新设计"；`tests/test_ui_semantics.py` 18 条覆盖派生、纠正、告警与提示词规则。
 - **义务账本在真实产物上自洽**：用仓库内 `output/demo/.arc` 实跑得到 59 条义务 / 3 个需求，
