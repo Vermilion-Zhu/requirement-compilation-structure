@@ -276,7 +276,7 @@
   keep 仍在运行，待回填。
 - 守卫在真实设计上的行为已验证：上一轮失败产物的 3 个面包屑地标会被 `semantic_issues` 全部点名。
 - 记录一个回退点（tag `pre-m4`），随后重放 M4（状态/`status`/动态名称 + 一次修复回合）。
-- M4 已重放：保留守卫，合并后全量 289 tests 通过；等新一轮 keep/bookstack 结果回填。
+- M4 已重放：保留守卫，合并后全量 290 tests 通过；等新一轮 keep/bookstack 结果回填。
 
 ### 2026-11-09 · bookstack 回归（ir_amended）
 

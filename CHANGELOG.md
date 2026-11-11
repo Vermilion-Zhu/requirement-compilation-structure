@@ -104,7 +104,7 @@
 | **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
 | **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
 
-测试现状：`289 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`290 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
