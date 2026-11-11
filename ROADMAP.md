@@ -156,7 +156,7 @@
 - **风险**：动态 URL/封装请求造成误报 → 宽松匹配 + 白名单。
 - **关联**：TA 06B、02D；轨道 A（后端）+ C（前端）。
 
-#### M4 语义 IR 补齐（C6 的正面修复）▶ 2026-11-11 守卫验证通过，开始重放
+#### M4 语义 IR 补齐（C6 的正面修复）✅ 2026-11-11 已重放（pre-m4 检查点之后）
 
 - **目标**：需求里显式写出的 role/aria 状态不丢失。
 - **改动**：
@@ -166,6 +166,8 @@
      `name` 支持 `{var}` 模板（动态区域名）；
   3. `semantic_issues` 非空时进入一次修复回合（不再只打印）。
 - **验收**：keep 类任务外部 11/11（若失败确在 status/pressed）；设计告警为 0；alert/status 分布正确。
+- **重放**：在 `pre-m4` 检查点（`b92f2a1`，bookstack 12/12）之上重放 M4，保留导航守卫；
+  合并点为 design/implementation 提示词与测试，全量 `289 tests, OK`；待新一轮运行验证 keep 外部成绩。
 - **回退原因**：bookstack 外部 11/12 → 3/11。产物显示该轮把面包屑建模成 3 个页面级 `navigation` 地标，每个都含 "Books" 链接；外部 `go()` 的 `getByRole('navigation').filter(has link 'Books').getByRole('link', {name:'Books'})` 因此解析到 2 个元素（全局壳 + 面包屑），9 条用例 strict-mode 失败。语义字段本身不是直接原因，而是「面包屑是 navigation」这一既有提示词遇上外部定位假设；已先加导航地标守卫（见 §9），M4 待守卫验证后重放。
 - **风险**：提示词影响其他任务 → 下一轮对比 bookstack + keep 两次运行。
 - **关联**：TA 03A/03C；轨道 B。
@@ -274,6 +276,7 @@
   keep 仍在运行，待回填。
 - 守卫在真实设计上的行为已验证：上一轮失败产物的 3 个面包屑地标会被 `semantic_issues` 全部点名。
 - 记录一个回退点（tag `pre-m4`），随后重放 M4（状态/`status`/动态名称 + 一次修复回合）。
+- M4 已重放：保留守卫，合并后全量 289 tests 通过；等新一轮 keep/bookstack 结果回填。
 
 ### 2026-11-09 · bookstack 回归（ir_amended）
 

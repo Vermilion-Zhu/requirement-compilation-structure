@@ -61,6 +61,11 @@ click when it also changes the route), a link role is an anchor with its href, a
 role is a nav landmark around its links, and a region role is a landmark labelled with the
 declared name. Use element.name as the accessible name when present; otherwise the visible
 text is the name. data-testid serves tests only and never replaces a role or label.
+Apply element.state as aria-* attributes on the same control (pressed becomes aria-pressed,
+current becomes aria-current, expanded becomes aria-expanded) and evaluate its boolean or
+variable rule on every render. name and label templates: substitute {var} with the current
+record value; keep the surrounding wording exact. A requirement that states a role or an
+ARIA state wins over the design when they disagree.
 Exception: a page-level link row (breadcrumb or section switcher) must not become a second
 nav landmark; render it as a container of links even when a design role suggests navigation,
 unless the original requirement explicitly requires a breadcrumb navigation landmark.
