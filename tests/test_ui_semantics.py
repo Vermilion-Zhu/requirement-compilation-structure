@@ -16,7 +16,7 @@ from infrastructure.stages.frontend.ui.design import (INSTRUCTIONS, ROLE_BY_TYPE
     semantic_issues)
 from infrastructure.stages.frontend.ui.implementation import INSTRUCTIONS as IMPLEMENTATION
 from infrastructure.stages.frontend.ui.proposals import EXAMPLE
-from infrastructure.stages.frontend.ui.synthesis import synthesize_ui
+from infrastructure.stages.frontend.ui.synthesis import repair_semantics, synthesize_ui
 from infrastructure.stages.requirements.tree import RequirementTree
 
 
@@ -270,6 +270,39 @@ class RepairRound(unittest.TestCase):
         self.assertIn("issues", requests[1])
         self.assertEqual(design["elements"]["UI-results"]["name"], "Results")
         self.assertEqual(semantic_issues(design), [])
+
+    def test_the_repair_round_can_drop_a_duplicate_navigation_landmark(self):
+        tree = RequirementTree(deepcopy(TREE_DOCUMENT))
+        design = normalize_design({
+            "pages": {
+                "home": {"name": "Home", "route": "/", "root": "UI-home", "images": []},
+                "books": {"name": "Books", "route": "/books", "root": "UI-books", "images": []},
+            },
+            "elements": {
+                "UI-app-nav": {"type": "container", "role": "navigation", "name": "Main navigation",
+                    "scope": "global", "parent": None, "prop": {}},
+                "UI-books-link": {"type": "link", "role": "link", "parent": "UI-app-nav",
+                    "prop": {"label": "Books"}},
+                "UI-home": {"type": "page", "parent": None, "prop": {}},
+                "UI-books": {"type": "page", "parent": None, "prop": {}},
+                "UI-breadcrumb": {"type": "container", "role": "navigation", "name": "Breadcrumb",
+                    "parent": "UI-home", "prop": {}},
+                "UI-breadcrumb-books": {"type": "link", "role": "link", "parent": "UI-breadcrumb",
+                    "prop": {"label": "Books"}},
+            },
+            "requirements": {"REQ-1": ["UI-home"]}, "steps": {},
+        }, tree)
+        self.assertTrue(any("repeats the global link" in issue for issue in semantic_issues(design)))
+
+        def repair(instructions, request):
+            self.assertTrue(any("repeats the global link" in issue for issue in request["issues"]))
+            return {"elements": {"UI-breadcrumb": {"type": "container", "role": "container",
+                "parent": "UI-home", "mode": [], "data": [], "prop": {}}}}
+
+        updated = repair_semantics(design, tree, Mock(generate_json=repair), Mock())
+        self.assertFalse(any("repeats the global link" in issue
+            for issue in semantic_issues(updated)))
+        self.assertIn("UI-breadcrumb-books", updated["elements"])
 
 
 class PromptRules(unittest.TestCase):
