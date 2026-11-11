@@ -61,6 +61,9 @@ click when it also changes the route), a link role is an anchor with its href, a
 role is a nav landmark around its links, and a region role is a landmark labelled with the
 declared name. Use element.name as the accessible name when present; otherwise the visible
 text is the name. data-testid serves tests only and never replaces a role or label.
+Exception: a page-level link row (breadcrumb or section switcher) must not become a second
+nav landmark; render it as a container of links even when a design role suggests navigation,
+unless the original requirement explicitly requires a breadcrumb navigation landmark.
 Preserve every explicitly required UI name and role verbatim, including language, spelling
 and case. Do not rename "Name" to "Shelf name", translate captions, or combine aliases.
 Keep visible labels and computed accessible names consistent: associate labels correctly,

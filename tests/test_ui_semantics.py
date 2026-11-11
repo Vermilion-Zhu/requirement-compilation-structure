@@ -11,6 +11,7 @@ import unittest
 from infrastructure.stages.frontend.ui.design import (INSTRUCTIONS, ROLE_BY_TYPE,
     apply_proposal, derived_role, empty_design, normalize_design, page_context,
     semantic_issues)
+from infrastructure.stages.frontend.ui.implementation import INSTRUCTIONS as IMPLEMENTATION
 from infrastructure.stages.frontend.ui.proposals import EXAMPLE
 from infrastructure.stages.requirements.tree import RequirementTree
 
@@ -148,12 +149,67 @@ class Proposals(unittest.TestCase):
         self.assertEqual(design["elements"]["UI-search"]["prop"]["label"], "Search")
 
 
+class DuplicateNavigation(unittest.TestCase):
+    def setUp(self):
+        self.tree = RequirementTree(deepcopy(TREE_DOCUMENT))
+        self.design = {
+            "pages": {
+                "home": {"name": "Home", "route": "/", "root": "UI-home", "images": []},
+                "books": {"name": "Books", "route": "/books", "root": "UI-books", "images": []},
+            },
+            "elements": {
+                "UI-app-header": {"type": "container", "role": "banner", "scope": "global",
+                    "parent": None, "prop": {}},
+                "UI-app-nav": {"type": "container", "role": "navigation", "name": "Main navigation",
+                    "scope": "global", "parent": "UI-app-header", "prop": {}},
+                "UI-books-link": {"type": "link", "role": "link", "parent": "UI-app-nav",
+                    "prop": {"label": "Books", "href": "/books"}},
+                "UI-home": {"type": "page", "parent": None, "prop": {}},
+                "UI-books": {"type": "page", "parent": None, "prop": {}},
+                "UI-breadcrumb": {"type": "container", "role": "navigation",
+                    "name": "Breadcrumb", "parent": "UI-home", "prop": {}},
+                "UI-breadcrumb-books": {"type": "link", "role": "link", "parent": "UI-breadcrumb",
+                    "prop": {"label": "Books", "href": "/books"}},
+            },
+            "requirements": {"REQ-1": ["UI-home"]},
+            "steps": {"STEP-1": ["UI-home"]},
+        }
+
+    def test_a_page_navigation_repeating_a_global_link_is_reported(self):
+        design = normalize_design(deepcopy(self.design), self.tree)
+        issues = semantic_issues(design)
+        self.assertTrue(any("UI-breadcrumb" in issue and "repeats the global link" in issue
+            for issue in issues), issues)
+
+    def test_a_page_link_row_with_distinct_links_is_fine(self):
+        design = deepcopy(self.design)
+        design["elements"]["UI-breadcrumb-books"]["prop"] = {"label": "Home", "href": "/"}
+        normalized = normalize_design(design, self.tree)
+        self.assertFalse(any("repeats the global link" in issue
+            for issue in semantic_issues(normalized)))
+
+    def test_the_shell_itself_is_not_reported(self):
+        design = normalize_design(deepcopy(self.design), self.tree)
+        issues = semantic_issues(design)
+        self.assertFalse(any("UI-app-nav" in issue for issue in issues))
+
+
 class PromptRules(unittest.TestCase):
     def test_prompt_states_the_accessibility_contract(self):
         for phrase in ("ACCESSIBILITY CONTRACT", "role button", "role navigation",
                 "accessible name", "never modelled as a link"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, INSTRUCTIONS)
+
+    def test_the_design_prompt_forbids_a_second_navigation_landmark(self):
+        for phrase in ("not as a second navigation landmark", "breadcrumb",
+                "Only the shell declares the", "primary navigation"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, INSTRUCTIONS)
+
+    def test_the_implementation_prompt_has_the_same_exception(self):
+        self.assertIn("must not become a second", IMPLEMENTATION)
+        self.assertIn("breadcrumb", IMPLEMENTATION)
 
     def test_prompt_rule_is_generic_not_application_specific(self):
         start = INSTRUCTIONS.index("ACCESSIBILITY CONTRACT" + chr(10) + "Declare role")

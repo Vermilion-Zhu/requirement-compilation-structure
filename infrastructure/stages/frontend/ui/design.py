@@ -49,8 +49,10 @@ every page shares. Design it once, not once per page.
   only when the requirement adds a genuinely new global entry.
 - A page root and its content use scope "page". Do not copy shell elements into a page and
   do not give a page its own duplicate primary navigation.
-- A page-local navigation is allowed only for page content (for example a breadcrumb or a
-  section switcher); the primary navigation belongs to the shell.
+- A page-level link row such as a breadcrumb or a section switcher is page content: model it
+  as a container of links, not as a second navigation landmark. Only the shell declares the
+  primary navigation landmark, unless the original requirement explicitly requires a
+  breadcrumb navigation landmark.
 The request lists the current shell; keep it consistent across requirements.
 
 ACCESSIBILITY CONTRACT
@@ -62,8 +64,10 @@ Choose role by behavior, not by destination:
   saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
   activating it changes the route: an action is never modelled as a link.
 - A control that only reveals another content view inside the reading flow (primary
-  navigation, breadcrumbs, links inside a list of records) is role link, and the container
-  that groups them is role navigation.
+  navigation, breadcrumbs, links inside a list of records) is role link. The container that
+  groups the links is role navigation only for the shell's primary navigation; page-level
+  breadcrumbs and section switchers stay role container so the application exposes exactly
+  one primary navigation landmark per page.
 - A group of records or items is role region with an explicit name. Status and error
   messages are role alert. A form is role form, and every input declares textbox, checkbox
   or combobox and is labelled by its visible label.
@@ -242,6 +246,28 @@ def shell_context(design: dict) -> dict:
     return {"roots": roots, "elements": shell}
 
 
+def _accessible_name(node: dict) -> str:
+    """Return the declared accessible name of one element."""
+    prop = node.get("prop") or {}
+    for value in (node.get("name"), prop.get("label"), prop.get("text")):
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _subtree(elements: dict, uid: str) -> set[str]:
+    """Return one element and every descendant below it."""
+    selected = {uid}
+    changed = True
+    while changed:
+        changed = False
+        for child_id, child in elements.items():
+            if child_id not in selected and child.get("parent") in selected:
+                selected.add(child_id)
+                changed = True
+    return selected
+
+
 def semantic_issues(design: dict) -> list[str]:
     """Report roles that contradict their element type or lack a required name."""
     issues = []
@@ -262,6 +288,24 @@ def semantic_issues(design: dict) -> list[str]:
                 issues.append(f"{uid}: global element must not be nested in a page")
     if len(design["pages"]) > 1 and not shell_elements(design):
         issues.append("design: several pages share no global shell")
+    global_links = set()
+    page_navigations = []
+    for uid, node in design["elements"].items():
+        if node.get("role") != "navigation":
+            continue
+        links = {_accessible_name(design["elements"][child_id])
+            for child_id in _subtree(design["elements"], uid)
+            if design["elements"][child_id].get("role") == "link"}
+        links.discard("")
+        if node.get("scope") == "global":
+            global_links |= links
+        else:
+            page_navigations.append((uid, links))
+    for uid, links in page_navigations:
+        duplicates = sorted(links & global_links)
+        if duplicates:
+            issues.append(f"{uid}: navigation repeats the global link(s) {duplicates!r}; "
+                "model breadcrumbs as page content instead of a second navigation landmark")
     return issues
 
 
