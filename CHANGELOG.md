@@ -166,6 +166,8 @@ uv run python scripts\package.py -o compiler.zip
 - **E2E 复用已用真实产物本地复现验证**：冷启动 4.27 s → 复用 3.05 s（同一条 spec、同为 2 passed），强制回退 5.03 s，三次输出均可解析且无任何 [e2e] 行。
 - **全局壳已落地**：旧产物在新规则下会报"several pages share no global shell"，说明壳缺口可被设计阶段识别；
   `tests/test_ui_shell.py` 18 条覆盖 scope 继承、壳投影、页面/壳分离与提示词通用性。
+- **导航守卫验证通过**：bookstack 外部在守卫 + M1/M2 后达到 **12/12**（keep 待复跑），
+  `semantic_issues` 能点名失败产物里的 3 个面包屑 navigation 地标。
 - **M1/M2 已落地**：模板依赖全部精确版本；安装失败带 npm 尾部且同一 manifest 不重试；
   E2E 生成提示词加入 5–8 s 等待预算（`tests/test_dependencies.py`、`tests/test_wait_budget.py`）。
 - **语义 IR 已落地**：旧产物规范化后得到 button=12/link=9/navigation=0 的分布，印证"规范化只是兜底，
