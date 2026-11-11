@@ -156,7 +156,7 @@
 - **风险**：动态 URL/封装请求造成误报 → 宽松匹配 + 白名单。
 - **关联**：TA 06B、02D；轨道 A（后端）+ C（前端）。
 
-#### M4 语义 IR 补齐（C6 的正面修复）
+#### M4 语义 IR 补齐（C6 的正面修复）⏸ 2026-11-09 回退，待重放
 
 - **目标**：需求里显式写出的 role/aria 状态不丢失。
 - **改动**：
@@ -166,6 +166,7 @@
      `name` 支持 `{var}` 模板（动态区域名）；
   3. `semantic_issues` 非空时进入一次修复回合（不再只打印）。
 - **验收**：keep 类任务外部 11/11（若失败确在 status/pressed）；设计告警为 0；alert/status 分布正确。
+- **回退原因**：bookstack 外部 11/12 → 3/11。产物显示该轮把面包屑建模成 3 个页面级 `navigation` 地标，每个都含 "Books" 链接；外部 `go()` 的 `getByRole('navigation').filter(has link 'Books').getByRole('link', {name:'Books'})` 因此解析到 2 个元素（全局壳 + 面包屑），9 条用例 strict-mode 失败。语义字段本身不是直接原因，而是「面包屑是 navigation」这一既有提示词遇上外部定位假设；已先加导航地标守卫（见 §9），M4 待守卫验证后重放。
 - **风险**：提示词影响其他任务 → 下一轮对比 bookstack + keep 两次运行。
 - **关联**：TA 03A/03C；轨道 B。
 
@@ -251,6 +252,7 @@
 | --- | --- |
 | D1 账本在无前端证据时过早 `RESOLVED`（第 11 阶段即 103/103） | 待修：`Implemented` 需要前端证据或明确"无 UI" |
 | 壳上的交互（登录/退出等）未进入 trigger 设计 | 待设计：壳元素纳入 trigger 范围 |
+| 面包屑被建模成第二个 navigation 地标（外部 strict mode 冲突） | ✅ 已修：提示词禁止第二地标 + `semantic_issues` 报告重复链接 |
 | 内部测试仍只断言 testid | 暂缓（M4 之后） |
 | `install_dependencies` 失败重试 | ✅ M1 已修（同一 manifest 不重试） |
 | 语义告警只打印不修复 | M4 |
@@ -265,6 +267,15 @@
 - 主要问题：阶段 12 数据接线（8 条诊断）、阶段 10 占位路由/testid（9 次 UI 失败）、
   后端 create-page 路由缺失（404）。
 - 结论：壳与 role/name 生效（navigation=1，7 个全局壳元素）。
+
+### 2026-11-09 · bookstack 回归（ir_amended）
+
+- 外部从 11/12 跌到 3/11。本地重建外部套件复现 3/12：9 条用例在同一处失败
+  `strict mode violation … resolved to 2 elements`（`UI-books-link` 与 `UI-book-breadcrumb-books`）。
+- 设计产物含 3 个页面级 `navigation`（book / book-delete / page 面包屑），每个都有 "Books" 链接；
+  上一版 11/12 的设计只有 `UI-app-nav`、没有面包屑元素。
+- 处理：回退 M1/M2/M4（`f87c13b`）；新增导航地标守卫与提示词（`8b4b5a0`）；重放 M1/M2（`661059c`）。
+  M4 暂不重放，待守卫在新一轮设计中生效后验证。
 
 ### 2026-11-08 · keep（semantics_keep）
 
