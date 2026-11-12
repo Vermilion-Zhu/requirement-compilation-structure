@@ -36,6 +36,16 @@ def test_path(pid: str) -> str:
     return f"frontend/tests/ui/{pid}.spec.ts"
 
 
+def text_matcher(text: str) -> str:
+    """Render fixed text or an IR name/label template as a Playwright expectation."""
+    parts = re.split(r"(\{[^{}]+\})", text)
+    if len(parts) == 1:
+        return json.dumps(text)
+    pattern = "^" + "".join(".*" if part.startswith("{") and part.endswith("}")
+                              else re.escape(part) for part in parts) + "$"
+    return "new RegExp(" + json.dumps(pattern) + ")"
+
+
 def existence_suite(design: dict, pid: str) -> str:
     """Supply test-local display data; check controls and actual application data keys."""
     page = design["pages"][pid]
@@ -98,14 +108,15 @@ def existence_suite(design: dict, pid: str) -> str:
                 if semantic_role:
                     lines.append(f"  await expect({locator}).toHaveRole({json.dumps(semantic_role)});")
                 if name:
-                    lines.append(f"  await expect({locator}).toHaveAccessibleName({json.dumps(name)});")
+                    lines.append(f"  await expect({locator}).toHaveAccessibleName({text_matcher(name)});")
                 prop = node.get("prop", {})
                 for key in ("text", "label"):
                     text = prop.get(key)
                     if isinstance(text, str) and text and kind not in {"input", "checkbox", "select"}:
-                        lines.append(f"  await expect({locator}).toContainText({json.dumps(text)});")
+                        matcher = text_matcher(text) if key == "label" else json.dumps(text)
+                        lines.append(f"  await expect({locator}).toContainText({matcher});")
                 if kind in {"input", "checkbox", "select"} and isinstance(prop.get("label"), str) and not name:
-                    lines.append(f"  await expect({locator}).toHaveAccessibleName({json.dumps(prop['label'])});")
+                    lines.append(f"  await expect({locator}).toHaveAccessibleName({text_matcher(prop['label'])});")
         lines.extend([
             '  await expect.poll(() => page.evaluate(({ pageId, keys }) => {',
             '    const state = (window as unknown as { __ARC_UI_DATA__?: { page: string; data: Record<string, unknown> } }).__ARC_UI_DATA__;',

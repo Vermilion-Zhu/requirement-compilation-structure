@@ -53,7 +53,8 @@ Prefer user-visible outcomes over unspecified cookie/hash encodings or storage s
 For a When action requiring one API operation, also observe its relevant method/endpoint and
 reject duplicate submissions when the requirement expects one operation. Start observing
 before the action, wait for its response and business completion, and exclude unrelated
-page-entry calls or explicitly required retries. Do not count all requests globally.
+page-entry calls or explicitly required retries. Bound that wait with a 5-8 second timeout
+instead of relying on the test timeout. Do not count all requests globally.
 There is no arbitrary test-count quota: cover the few important outcomes for this task.
 
 The database fixture restores requirement-defined startup data before each test. Reuse

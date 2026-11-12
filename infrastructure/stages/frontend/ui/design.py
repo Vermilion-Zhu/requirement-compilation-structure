@@ -11,12 +11,12 @@ production initial values, example runtime objects or display fixtures.
 
 OUTPUT CONTRACT
 Return one JSON object with four sibling keys: elements, pages, requirement_ui, step_ui.
-elements maps ELEMENT IDs to {type, role, name, scope, parent, mode, data, prop}. A page root
-has type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use ordinary
-types: container, form, input, checkbox, select, button, text, heading, link, list, item,
-image, status, alert or table. role is required (see ACCESSIBILITY CONTRACT); name is optional;
-scope is "global" for application chrome and "page" otherwise. mode is an array
-containing user_read and/or user_write, or [].
+elements maps ELEMENT IDs to {type, role, name, state, scope, parent, mode, data, prop}. A page
+root has type "page" and parent=null. Other elements reference a parent ELEMENT ID. Use
+ordinary types: container, form, input, checkbox, select, button, text, heading, link, list,
+item, image, alert, status or table. role is required (see ACCESSIBILITY CONTRACT); name is
+optional; state maps ARIA states to their data binding; scope is "global" for application
+chrome and "page" otherwise. mode is an array containing user_read and/or user_write, or [].
 
 data is an array of variable declarations: {var, dtype, constraints}.
 var is the frontend variable name; dtype is string, integer, number, boolean, array,
@@ -29,17 +29,14 @@ prop contains static text, label, placeholder, input_type, options, style, href,
 or heading level. Optional prop.visible is a boolean or {var:VARIABLE_NAME, equals:VALUE}.
 A status dependency controls visibility without requiring its raw value as display text.
 
-Preserve explicit requirement roles, labels, placeholders and accessible names, including
-language, spelling and case. Defaults apply only to unspecified properties. Reference images and
-examples cannot override the original requirement. Business record values remain dynamic.
-Store visible wording in prop.text or prop.label. Store a required accessible name in name.
-Visible text and accessible name are separate properties. For status/alert feedback
-identified by specific message text in the requirement, default name to that message
-unless the requirement specifies a different name or explicitly leaves it unnamed. Keep
-this default name synchronized with the displayed message; exclude child action captions.
-For different messages under different conditions, declare separate elements with their
-own name, prop.text and prop.visible, using the existing fields. Do not invent an umbrella
-name for these messages. For other elements, choose names only where needed by the UI.
+Treat explicit UI names and roles in the original requirement as interface contracts.
+Preserve required labels, action names, region names and placeholders verbatim, including
+language, spelling and case. Do not paraphrase, add object-type prefixes, translate or
+concatenate aliases: a required "Name" field must not become "Shelf name". Record the
+wording in the existing element.prop; do not create a separate naming registry.
+Explicit requirement wording takes precedence over visual-reference examples. Only choose
+wording freely when it is unspecified or alternatives are explicitly allowed. Business
+record names and user-entered values remain dynamic; example data is not fixed UI wording.
 
 APPLICATION SHELL
 The application has one shell: the header, primary navigation, footer and other chrome that
@@ -52,26 +49,43 @@ every page shares. Design it once, not once per page.
   only when the requirement adds a genuinely new global entry.
 - A page root and its content use scope "page". Do not copy shell elements into a page and
   do not give a page its own duplicate primary navigation.
-- A page-local navigation is allowed only for page content (for example a breadcrumb or a
-  section switcher); the primary navigation belongs to the shell.
+- A page-level link row such as a breadcrumb or a section switcher is page content: model it
+  as a container of links, not as a second navigation landmark. Only the shell declares the
+  primary navigation landmark, unless the original requirement explicitly requires a
+  breadcrumb navigation landmark.
 The request lists the current shell; keep it consistent across requirements.
 
 ACCESSIBILITY CONTRACT
 Declare role for every element. role states what the control is, independently of styling:
 page, main, region, navigation, heading, button, link, textbox, checkbox, combobox, list,
-listitem, form, img, status, alert, table, dialog, text or container.
+listitem, form, img, alert, status, table, dialog, text or container.
 For unspecified roles, choose by behavior:
 - A control that changes data or the current record/form, opens an editor or dialog, submits,
   saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
   activating it changes the route: an action is never modelled as a link.
 - A control that only reveals another content view inside the reading flow (primary
-  navigation, breadcrumbs, links inside a list of records) is role link, and the container
-  that groups them is role navigation.
-- Choose a list, group or named region according to the collection's purpose. For unspecified messages,
-  use status for routine feedback and alert for urgent messages requiring attention.
-  A form is role form, and every input declares textbox, checkbox
-  or combobox and is labelled by its visible label.
+  navigation, breadcrumbs, links inside a list of records) is role link. The container that
+  groups the links is role navigation only for the shell's primary navigation; page-level
+  breadcrumbs and section switchers stay role container so the application exposes exactly
+  one primary navigation landmark per page.
+- A group of records or items is role region with an explicit name. Success and
+  informational notices are role status; errors and interruption warnings are role alert.
+  A form is role form, and every input declares textbox, checkbox or combobox and is
+  labelled by its visible label.
 - A page root is role page; use container for ungrouped layout boxes.
+A requirement that states a role verbatim wins over the heuristics above: use exactly that
+role even when the visual reference or another rule suggests otherwise. A requirement that
+states an ARIA state (for example pressed, current, expanded, selected, checked) must be
+recorded in element.state even when the styling does not show it; do not leave a stated
+state to the implementation's discretion.
+Preserve explicitly required accessible names. Visible wording and accessible names are
+separate properties. For status/alert feedback identified by specific message text, default
+name to that message unless the requirement specifies another name or leaves it unnamed.
+For different messages, use separate elements with their own name, text and visibility.
+Exclude child action captions from feedback names. Other names are chosen where needed.
+name and prop.label are templates: use {var} for a current-record value, for example
+{note.title}. Preserve the exact required template without adding object-type prefixes.
+The implementation substitutes the actual value on every render.
 
 pages maps PAGE IDs to {name, route, root, images}. route is a URL path, root is an
 ELEMENT ID and images lists supplied image IDs. Preserve explicit image.page hints.
@@ -99,7 +113,7 @@ ROLE_BY_TYPE = {
     "page": "page", "container": "container", "form": "form", "input": "textbox",
     "checkbox": "checkbox", "select": "combobox", "button": "button", "link": "link",
     "text": "text", "heading": "heading", "list": "list", "item": "listitem",
-    "image": "img", "status": "status", "alert": "alert", "table": "table",
+    "image": "img", "alert": "alert", "status": "status", "table": "table",
 }
 ROLE_BY_INPUT_TYPE = {"checkbox": "checkbox", "radio": "radio", "number": "spinbutton"}
 # Only roles whose element implementation is unambiguous are constrained. Structural
@@ -108,12 +122,14 @@ ROLE_FAMILIES = {
     "page": {"page", "main"}, "form": {"form"},
     "input": {"textbox", "checkbox", "combobox", "spinbutton", "radio", "searchbox"},
     "checkbox": {"checkbox"}, "select": {"combobox"}, "button": {"button"},
-    "link": {"link"}, "heading": {"heading"}, "image": {"img"}, "status": {"status"}, "alert": {"alert"},
-    "table": {"table"},
+    "link": {"link"}, "heading": {"heading"}, "image": {"img"}, "alert": {"alert"},
+    "status": {"status"}, "table": {"table"},
 }
 # Roles whose meaning depends on an accessible name the markup cannot derive from its text.
 NAMED_ROLES = {"region", "navigation"}
 SCOPES = {"page", "global"}
+# ARIA states a design may bind to data; the implementation renders them as aria-* attributes.
+ARIA_STATES = {"pressed", "current", "expanded", "selected", "checked", "disabled", "busy", "invalid"}
 
 
 def derived_role(node: dict) -> str:
@@ -207,6 +223,21 @@ def normalize_design(design, tree):
             node.pop("name", None)
         scope = str(node.get("scope") or "").strip().lower()
         node["scope"] = scope if scope in SCOPES else "page"
+        state = node.get("state")
+        if isinstance(state, dict):
+            cleaned = {}
+            for key, value in state.items():
+                if not isinstance(key, str):
+                    continue
+                attribute = key.strip().lower().removeprefix("aria-")
+                if attribute in ARIA_STATES:
+                    cleaned[attribute] = value
+            if cleaned:
+                node["state"] = cleaned
+            else:
+                node.pop("state", None)
+        else:
+            node.pop("state", None)
     inherit_global_scope(design)
     for kind, expected in (("requirements", tree.requirements), ("steps", tree.steps)):
         for identity in expected:
@@ -242,8 +273,30 @@ def shell_context(design: dict) -> dict:
     return {"roots": roots, "elements": shell}
 
 
+def _accessible_name(node: dict) -> str:
+    """Return the declared accessible name of one element."""
+    prop = node.get("prop") or {}
+    for value in (node.get("name"), prop.get("label"), prop.get("text")):
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _subtree(elements: dict, uid: str) -> set[str]:
+    """Return one element and every descendant below it."""
+    selected = {uid}
+    changed = True
+    while changed:
+        changed = False
+        for child_id, child in elements.items():
+            if child_id not in selected and child.get("parent") in selected:
+                selected.add(child_id)
+                changed = True
+    return selected
+
+
 def semantic_issues(design: dict) -> list[str]:
-    """Report roles that contradict their element type or lack a required name."""
+    """Report roles, names or states that cannot be rendered as declared."""
     issues = []
     for uid, node in design["elements"].items():
         kind = str(node.get("type") or "").strip().lower()
@@ -256,12 +309,40 @@ def semantic_issues(design: dict) -> list[str]:
         label = (node.get("prop") or {}).get("label")
         if role in NAMED_ROLES and not (node.get("name") or label):
             issues.append(f"{uid}: {role} needs an accessible name")
+        state = node.get("state")
+        if state is not None and not isinstance(state, dict):
+            issues.append(f"{uid}: state must map ARIA states to data bindings")
+        elif isinstance(state, dict):
+            for key, value in state.items():
+                if str(key).strip().lower() not in ARIA_STATES:
+                    issues.append(f"{uid}: unknown ARIA state {key!r}")
+                elif not (isinstance(value, bool)
+                        or (isinstance(value, dict) and isinstance(value.get("var"), str))):
+                    issues.append(f"{uid}: state {key!r} needs a boolean or a variable rule")
         if node.get("scope") == "global":
             parent = design["elements"].get(node.get("parent")) if isinstance(node.get("parent"), str) else None
             if parent is not None and parent.get("scope") != "global":
                 issues.append(f"{uid}: global element must not be nested in a page")
     if len(design["pages"]) > 1 and not shell_elements(design):
         issues.append("design: several pages share no global shell")
+    global_links = set()
+    page_navigations = []
+    for uid, node in design["elements"].items():
+        if node.get("role") != "navigation":
+            continue
+        links = {_accessible_name(design["elements"][child_id])
+            for child_id in _subtree(design["elements"], uid)
+            if design["elements"][child_id].get("role") == "link"}
+        links.discard("")
+        if node.get("scope") == "global":
+            global_links |= links
+        else:
+            page_navigations.append((uid, links))
+    for uid, links in page_navigations:
+        duplicates = sorted(links & global_links)
+        if duplicates:
+            issues.append(f"{uid}: navigation repeats the global link(s) {duplicates!r}; "
+                "model breadcrumbs as page content instead of a second navigation landmark")
     return issues
 
 

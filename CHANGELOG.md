@@ -62,6 +62,28 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
+### 2.9 第九轮：M4 重放（导航守卫之后）
+
+| 项 | 内容 |
+| --- | --- |
+| 重放点 | `pre-m4` 检查点（`b92f2a1`，bookstack 12/12）之上，保留 `8b4b5a0` 的导航守卫 |
+| 合并 | M4 的 `state`/`status`/动态 name 与守卫的"仅壳声明主导航"共存：design/implementation 提示词合并为同一段，`semantic_issues` 同时保留状态校验与重复导航检查 |
+| 测试 | `test_ui_semantics.py` 合并为 30 条（守卫 5 条 + M4 7 条 + 原有）；全量 289 tests |
+
+### 2.8 第八轮：导航地标守卫（bookstack 回归修复）
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **第二个 navigation 地标** | bookstack 外部从 11/12 跌到 3/11：该轮设计把面包屑建模成 3 个页面级 `navigation`，每个都含 "Books" 链接；外部 `go()` 的 `getByRole('navigation').filter(has link 'Books').getByRole('link', {name:'Books'})` 解析到 2 个元素，9 条用例 strict-mode 失败 | 设计提示词明确"面包屑/分段切换器是页面内容（链接容器），只有应用壳声明主导航地标，除非需求显式要求面包屑导航地标"；实现提示词加同样例外；`semantic_issues` 新增"页面级 navigation 重复了壳导航链接名"的报告（用失败产物验证：恰好命中 3 个面包屑） |
+| **回处理** | — | 回退 M1/M2/M4（`f87c13b`）→ 修复守卫（`8b4b5a0`）→ 重放 M1/M2（`661059c`）；M4 待守卫验证后重放 |
+
+### 2.7 第七轮：M1 依赖可复现与 M2 等待预算
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **依赖漂移** | 模板 `tailwindcss: "^4.0.0"` 在平台镜像解析到 4.3.5，而 `@tailwindcss/oxide@4.3.5` 不存在：6 次 ETARGET、5 次安装失败、阶段 05 762 s、12 轮编辑 | 模板锁定到已验证的 `4.3.4`（含 `@tailwindcss/vite`）；`install_dependencies` 失败信息附 npm 输出尾部；新增 `ensure_database_dependencies`：同一 manifest 失败只报一次，不再重跑 npm；manifest 变化才重试 |
+| **E2E 失败成本** | 失败 spec 63–64 s（2 条用例 × 30 s 测试超时） | 功能 E2E 与独立验收的生成提示词要求 `waitForResponse`/路由/关键断言使用 5–8 s 显式超时，缺失请求快速失败，30 s 仅作兜底 |
+
 ### 2.6 第六轮：全局壳（Application Shell）
 
 | 项 | 问题 | 改动 |
@@ -82,7 +104,7 @@
 | **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
 | **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
 
-测试现状：`266 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`290 tests, OK (skipped=48)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
@@ -152,6 +174,10 @@ uv run python scripts\package.py -o compiler.zip
 - **E2E 复用已用真实产物本地复现验证**：冷启动 4.27 s → 复用 3.05 s（同一条 spec、同为 2 passed），强制回退 5.03 s，三次输出均可解析且无任何 [e2e] 行。
 - **全局壳已落地**：旧产物在新规则下会报"several pages share no global shell"，说明壳缺口可被设计阶段识别；
   `tests/test_ui_shell.py` 18 条覆盖 scope 继承、壳投影、页面/壳分离与提示词通用性。
+- **导航守卫验证通过**：bookstack 外部在守卫 + M1/M2 后达到 **12/12**（keep 待复跑），
+  `semantic_issues` 能点名失败产物里的 3 个面包屑 navigation 地标。
+- **M1/M2 已落地**：模板依赖全部精确版本；安装失败带 npm 尾部且同一 manifest 不重试；
+  E2E 生成提示词加入 5–8 s 等待预算（`tests/test_dependencies.py`、`tests/test_wait_budget.py`）。
 - **语义 IR 已落地**：旧产物规范化后得到 button=12/link=9/navigation=0 的分布，印证"规范化只是兜底，
   语义要靠新提示词重新设计"；`tests/test_ui_semantics.py` 18 条覆盖派生、纠正、告警与提示词规则。
 - **义务账本在真实产物上自洽**：用仓库内 `output/demo/.arc` 实跑得到 59 条义务 / 3 个需求，
@@ -179,9 +205,15 @@ uv run python scripts\package.py -o compiler.zip
 
 ## 6. 下一步
 
-1. **算法改进**（见 `principle.md` 与详细分析）：D1 账本已就位，下一步是 **D2**（把声明的 R/W
-   与生成代码的实际访问比对，暴露"声明了但没访问"与"访问了但没声明"）、再是 **D3**（Reference 的
-   data/state 两种语义）与 **D7**（把三层正确性汇总成 `correctness.json`）。
-2. **移植 legacy 用例**：按整文件替换、model-owned wiring、扁平 tool call 三条契约逐组重写。
-3. **用下一次冒烟日志验证本轮四项修正**：`max_turns=20` 是否消除耗尽、E2E 复用是否把第 12 阶段压下来、
-   读取拒绝是否归零——直接跑 `python scripts/analyze_log.py <log>` 即可对比。
+完整路线图、两次运行的日志分析、助教 14 个扩展点清单与三人分工见 **`ROADMAP.md`**。近期顺序：
+
+1. **批次 1（M1+M2）**：锁定模板依赖版本并让安装失败一次即停、可诊断；E2E 等待预算降到 5–8 s。
+2. **批次 2（M3+M4）**：后端路由 / 前端接线的静态完整性检查；IR 补齐 `status`/`aria-*` 状态与动态 name，
+   语义告警进入一次修复回合。
+3. **批次 3（M5+M6）**：种子幂等与测试知识注入；页面/路由骨架先行。
+4. **批次 4（M7）**：RAG 始终携带应用壳与全部页面，"壳先行"设计。
+5. **研究轨道**：D2 实际访问校验、D3 Reference 传播、D7 `correctness.json`，以及助教扩展点实验
+   （01C 视觉、02C/06A 检索、03A/03C 义务推断、05A/05C SQL 下沉、06B API→DB 分解）。
+
+> 历史：D1 义务账本（`533e04e`）、语义 IR（`4672e4d`）、全局壳（`66a5900`）、E2E 复用与静默
+> （`9e0d778`→`4e91345`）已完成；内部测试的 role/name 断言暂缓到 M4 之后。

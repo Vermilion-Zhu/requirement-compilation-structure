@@ -55,13 +55,31 @@ input synchronization; no such host is generated.
 
 Render real layout, labels, controls and conditional content with original text and stable
 data-testid=ELEMENT_ID selectors. Use the installed dependencies and configured styles.
-Render each declared role and accessible name. Follow explicit original requirements
-when they conflict with the design or reference image, and explain the discrepancy.
-Preserve required wording exactly. Choose markup and naming mechanisms that satisfy the
-browser's computed role and accessible name. Visible text alone does not supply a name
-for every role. Keep prop.text/prop.label visible and honor element.name when present.
-The presence suite checks the declared semantics on each data-testid element.
-Only use exact placeholders when required. Business record values come from actual data.
+Each element declares role and may declare name; render that role, not whichever tag seems
+convenient. A button role is a real button element (use the router's navigation call on
+click when it also changes the route), a link role is an anchor with its href, a navigation
+role is a nav landmark around its links, and a region role is a landmark labelled with the
+declared name. Use element.name as the accessible name when present; otherwise the visible
+text supplies a name only when supported by the role. Render explicitly named status/alert
+elements with the required accessible name. data-testid never replaces a role or label.
+Apply element.state as aria-* attributes on the same control (pressed becomes aria-pressed,
+current becomes aria-current, expanded becomes aria-expanded) and evaluate its boolean or
+variable rule on every render. name and label templates: substitute {var} with the current
+record value; keep the surrounding wording exact. A requirement that states a role or an
+ARIA state wins over the design when they disagree.
+Exception: a page-level link row (breadcrumb or section switcher) must not become a second
+nav landmark; render it as a container of links even when a design role suggests navigation,
+unless the original requirement explicitly requires a breadcrumb navigation landmark.
+Preserve every explicitly required UI name and role verbatim, including language, spelling
+and case. Do not rename "Name" to "Shelf name", translate captions, or combine aliases.
+Keep visible labels and computed accessible names consistent: associate labels correctly,
+and do not override them with a different aria-label or concatenate unrelated text through
+aria-labelledby. Use exact placeholders only when the requirement specifies placeholders;
+an accessible field name alone does not prescribe a placeholder or HTML implementation.
+Apply this to buttons, links, headings and named regions as well as form fields. If the
+generated design or reference image conflicts with an explicit original UI contract, follow
+the original requirement and explain the discrepancy. Unspecified wording is an implementation
+choice; business object names still come from actual data, not reference examples.
 This stage builds presentation, native editing and navigation, not business API operations,
 session restoration or later requirements' workflows. Step 12 adds those interactions.
 Keep one clear owner for each native form/navigation action. Later implementation must

@@ -666,6 +666,21 @@ class PresenceSemantics(unittest.TestCase):
             if should_fail:
                 parts.append('test.fail();')
             parts.extend([suite, '});'])
+        for title, actual_name, should_fail in [
+            ("dynamic name", "Record 42", False),
+            ("dynamic name wrong prefix", "Wrong 42", True),
+        ]:
+            html = '<div data-testid="feedback" role="status" aria-label="' + actual_name + '">' + actual_name + '</div>'
+            html += '<script>window.__ARC_UI_DATA__={page:"home",data:{}}</script>'
+            design = self.design("Record {record.title}")
+            design["elements"]["feedback"]["prop"] = {"label": "Record {record.title}"}
+            suite = existence_suite(design, "home")
+            suite = suite.replace('import { test, expect } from "@playwright/test";', '')
+            suite = suite.replace('await page.goto("/");', 'await page.setContent(' + json.dumps(html) + ');')
+            parts.append('test.describe(' + json.dumps(title) + ', () => {')
+            if should_fail:
+                parts.append('test.fail();')
+            parts.extend([suite, '});'])
         with TemporaryDirectory(prefix="presence-semantics-") as temporary:
             root = Path(temporary)
             (root / "semantics.spec.ts").write_text("\n".join(parts), encoding="utf-8")
@@ -677,7 +692,7 @@ class PresenceSemantics(unittest.TestCase):
                 cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads(result.stdout)
-            self.assertEqual(report["stats"]["expected"], 5)
+            self.assertEqual(report["stats"]["expected"], 7)
             self.assertEqual(report["stats"]["unexpected"], 0)
             self.assertEqual(report["stats"]["skipped"], 0)
 

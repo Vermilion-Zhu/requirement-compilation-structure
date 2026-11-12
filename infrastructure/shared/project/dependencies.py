@@ -6,6 +6,9 @@ from threading import Thread
 
 from infrastructure.utils.processes import npm_command, start_process, stop_process
 
+# npm prints the actionable cause last; keep enough of it to survive in feedback.
+OUTPUT_TAIL = 20
+
 
 def install_dependencies(output_dir: Path) -> None:
     """Run npm install in the generated workspace, stream its output, and fail on timeout or nonzero exit."""
@@ -13,6 +16,7 @@ def install_dependencies(output_dir: Path) -> None:
         raise ValueError("Run the project-initialization pass (00) before installing project dependencies")
     command = npm_command()
     print(f"Installing dependencies in {output_dir}: npm install --include=dev --no-audit --no-fund", flush=True)
+    tail = []
     with start_process(
         [*command, "install", "--include=dev", "--no-audit", "--no-fund"],
         cwd=output_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -20,9 +24,11 @@ def install_dependencies(output_dir: Path) -> None:
     ) as process:
         # Forward child output through Python so the console log also receives it.
         def forward_output():
-            """Forward npm output through Python so both the terminal and compiler.log receive it."""
+            """Forward npm output through Python and retain its tail for failure feedback."""
             for line in process.stdout:
                 print(line, end="", flush=True)
+                tail.append(line.rstrip())
+                del tail[:-OUTPUT_TAIL]
 
         reader = Thread(target=forward_output, daemon=True)
         reader.start()
@@ -37,4 +43,6 @@ def install_dependencies(output_dir: Path) -> None:
         finally:
             reader.join()
         if process.returncode:
-            raise RuntimeError(f"npm install failed with exit code {process.returncode}; see the npm output above")
+            detail = "\n".join(tail).strip()
+            raise RuntimeError(f"npm install failed with exit code {process.returncode}"
+                + (":\n" + detail if detail else ""))
