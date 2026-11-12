@@ -39,7 +39,11 @@ observed implementation result or duplicate process smoke tests.
 
 Write a small Playwright suite at test_path using the supplied test/expect/database
 fixture. Drive When actions through the real browser without mocks or injected state.
-Use UI IDs or accessible locators for actions. Assert original required visible business
+Use UI IDs or accessible locators for actions. Assert each explicitly required role,
+accessible name and visible text as a separate property. A role plus visible wording does
+not by itself require that wording as the accessible name. Check an exact accessible name
+only when required by the original requirement. Role-only requirements still need role
+assertions; visible text alone cannot verify a role. Assert original required business
 outcomes, not design-inferred internal labels or every DOM attribute. Cover main success,
 critical rejection, correct identity/ownership, and refresh/persistence WHEN required.
 Use two distinct identities where identity isolation matters; a test that only creates

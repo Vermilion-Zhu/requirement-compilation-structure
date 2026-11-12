@@ -59,7 +59,7 @@ ACCESSIBILITY CONTRACT
 Declare role for every element. role states what the control is, independently of styling:
 page, main, region, navigation, heading, button, link, textbox, checkbox, combobox, list,
 listitem, form, img, alert, status, table, dialog, text or container.
-Choose role by behavior, not by destination:
+For unspecified roles, choose by behavior:
 - A control that changes data or the current record/form, opens an editor or dialog, submits,
   saves, cancels, confirms, deletes, adds or removes is role button. This holds even when
   activating it changes the route: an action is never modelled as a link.
@@ -78,12 +78,14 @@ role even when the visual reference or another rule suggests otherwise. A requir
 states an ARIA state (for example pressed, current, expanded, selected, checked) must be
 recorded in element.state even when the styling does not show it; do not leave a stated
 state to the implementation's discretion.
-Declare name only when the accessible name differs from the visible text: icon-only controls,
-icon-only regions, or a caption that is not rendered. Otherwise omit name and keep the
-visible wording exact. name never paraphrases, duplicates or decorates a label. name and
-prop.label are templates: write {var} for a value supplied by the current record (for
-example {note.title}); the implementation substitutes the real value on every render.
-When the original requirement states a role, that role wins over visual inference.
+Preserve explicitly required accessible names. Visible wording and accessible names are
+separate properties. For status/alert feedback identified by specific message text, default
+name to that message unless the requirement specifies another name or leaves it unnamed.
+For different messages, use separate elements with their own name, text and visibility.
+Exclude child action captions from feedback names. Other names are chosen where needed.
+name and prop.label are templates: use {var} for a current-record value, for example
+{note.title}. Preserve the exact required template without adding object-type prefixes.
+The implementation substitutes the actual value on every render.
 
 pages maps PAGE IDs to {name, route, root, images}. route is a URL path, root is an
 ELEMENT ID and images lists supplied image IDs. Preserve explicit image.page hints.

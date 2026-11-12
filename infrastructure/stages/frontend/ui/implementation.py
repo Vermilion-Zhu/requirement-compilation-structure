@@ -60,7 +60,8 @@ convenient. A button role is a real button element (use the router's navigation 
 click when it also changes the route), a link role is an anchor with its href, a navigation
 role is a nav landmark around its links, and a region role is a landmark labelled with the
 declared name. Use element.name as the accessible name when present; otherwise the visible
-text is the name. data-testid serves tests only and never replaces a role or label.
+text supplies a name only when supported by the role. Render explicitly named status/alert
+elements with the required accessible name. data-testid never replaces a role or label.
 Apply element.state as aria-* attributes on the same control (pressed becomes aria-pressed,
 current becomes aria-current, expanded becomes aria-expanded) and evaluate its boolean or
 variable rule on every render. name and label templates: substitute {var} with the current
@@ -87,8 +88,8 @@ extend that existing handler, not add another independently firing click/submit 
 Preserve the presentation-test adapter in frontend/src/ui-runtime.ts. Call presentationData
 with this page ID and a projection of the actual declared frontend values when rendering.
 It supplies display-test overrides and exposes actual data keys; it does not own your state.
-Do not copy display-test records into production initial values. If representative records
-are needed, arrange them only in the writable presence suite's __ARC_UI_TEST_DATA__ setup.
+The compiler regenerates presence suites from the current design. They are read-only during
+implementation repair. Keep test-local display overrides out of production initial values.
 
 The compiler compiles, runs current/accepted presence tests and builds; it never regenerates
 App, routes, handlers or stores. Repair relevant writable sources without removing previous
@@ -123,8 +124,7 @@ def implement_ui(arc_dir: Path, design: dict, model, console, report: dict, max_
         uses = owners(design, pid)
         relative = test_path(pid)
         suite = existence_suite(design, pid)
-        if not (output / relative).is_file():
-            save_text(output / relative, suite)
+        save_text(output / relative, suite)
         report["pages"][pid] = {"status": "TESTS_READY", "requirements": uses, "test_path": relative}
         save_json(arc_dir / "ui_checks.json", report)
         label = f"UI {number}/{len(design['pages'])} {pid}"

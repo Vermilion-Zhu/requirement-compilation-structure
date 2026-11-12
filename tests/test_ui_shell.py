@@ -94,10 +94,11 @@ class ShellProjection(unittest.TestCase):
         self.assertNotIn("UI-nav", context["elements"])
         self.assertIn("UI-nav", context["shell"]["elements"])
 
-    def test_the_shell_is_not_duplicated_into_page_existence_tests(self):
+    def test_shell_is_checked_alongside_page_content(self):
         suite = existence_suite(self.design, "books")
         self.assertIn("UI-books-list", suite)
-        self.assertNotIn("UI-nav", suite)
+        self.assertIn('getByTestId("UI-nav")', suite)
+        self.assertIn('toHaveRole("navigation")', suite)
 
 
 class ShellIssues(unittest.TestCase):

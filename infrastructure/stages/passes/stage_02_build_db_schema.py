@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from infrastructure.shared.project import runtime_events
 from infrastructure.shared.models.text import TextModel
 from infrastructure.utils.presentation.console import DemoConsole
 from infrastructure.utils.presentation.formatting import format_changes, format_schema
@@ -145,6 +146,7 @@ def build_db_schema(arc_dir: Path, pause: bool = False, top_k: int = 6, max_atte
                 changes
             ))
             schema = updated
+            runtime_events.database_schema(schema)
             console.artifact("db_schema", schema, f"{label} | Accepted schema")
     failures.finish()
     print(f"Schema saved: {arc_dir / 'db_schema.json'}", flush=True)

@@ -32,4 +32,5 @@ def editable_application_path(output, relative):
             and not relative.startswith("backend/src/db/")))
     return (relative.startswith(("backend/tests/", "frontend/tests/"))
         and relative.endswith((".test.ts", ".spec.ts"))
+        and not relative.startswith("frontend/tests/ui/")
         and "/tests/e2e/acceptance/" not in relative and not (templates / relative).is_file())

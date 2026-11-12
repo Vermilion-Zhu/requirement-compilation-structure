@@ -1,14 +1,17 @@
 """Frontend representation, publication, lifecycle dependencies and acceptance regressions."""
 from tool_fixtures import propose_files
 
+from contextlib import ExitStack
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
+import shutil
+import subprocess
 import unittest
 
 from support import legacy
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from infrastructure.stages.requirements.tree import RequirementTree
 from infrastructure.stages.frontend.context import load_ui_context
@@ -574,6 +577,124 @@ class FrontendFlow(unittest.TestCase):
         self.assertEqual(presentation_run_status(page_report), "REPAIR_REQUIRED")
         report["failures"] = ["E2E_BACKEND_ERROR: undeclared response"]
         with self.assertRaises(ValueError): test_run_status(report)
+
+
+
+
+
+class PresenceSemantics(unittest.TestCase):
+    def design(self, name=None):
+        feedback = {"type": "container", "role": "status", "parent": "root",
+                    "prop": {"text": "Operation complete"}}
+        if name is not None:
+            feedback["name"] = name
+        return {"pages": {"home": {"route": "/", "root": "root"}},
+                "elements": {"root": {"type": "container", "parent": None},
+                             "feedback": feedback}}
+
+    def test_presence_suite_checks_declared_semantics_without_inventing_names(self):
+        from infrastructure.stages.frontend.ui.testing import existence_suite
+        unnamed = existence_suite(self.design(), "home")
+        named = existence_suite(self.design("Operation complete"), "home")
+        self.assertIn('.toHaveRole("status")', unnamed)
+        self.assertNotIn("toHaveAccessibleName", unnamed)
+        self.assertIn('.toHaveAccessibleName("Operation complete")', named)
+
+    def test_presence_suites_are_read_only_even_after_failure_feedback(self):
+        from infrastructure.shared.agent.context import SourceFiles
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = "frontend/tests/ui/home.spec.ts"
+            target = root / relative
+            target.parent.mkdir(parents=True)
+            target.write_text("// compiler-owned", encoding="utf-8")
+            selection = SourceFiles(root, self.design())
+            workspace = selection.workspace(references=[relative])
+            self.assertFalse(workspace.can_write(relative))
+            self.assertFalse(workspace.can_write("frontend/tests/ui/new.spec.ts"))
+            selection.feedback(workspace, {"error": relative})
+            self.assertFalse(workspace.can_write(relative))
+            self.assertTrue(workspace.can_write("frontend/src/App.tsx"))
+            self.assertTrue(workspace.can_write("frontend/tests/e2e/scenario.spec.ts"))
+
+    def test_rerunning_ui_stage_replaces_stale_presence_suite(self):
+        from infrastructure.stages.frontend.ui.implementation import implement_ui
+        from infrastructure.stages.frontend.ui.testing import existence_suite
+        with TemporaryDirectory() as temporary, ExitStack() as stack:
+            root = Path(temporary)
+            relative = root / "frontend/tests/ui/home.spec.ts"
+            relative.parent.mkdir(parents=True)
+            relative.write_text("// stale test without role assertions", encoding="utf-8")
+            for target in ("prepare_frontend", "install_dependencies", "checkpoint"):
+                stack.enter_context(patch("infrastructure.stages.frontend.ui.implementation." + target))
+            stack.enter_context(patch("infrastructure.shared.agent.recovery.checkpoint"))
+            checks = stack.enter_context(patch("infrastructure.stages.frontend.ui.implementation.FrontendChecks")).return_value
+            checks.typecheck.return_value = {"returncode": 0}
+            checks.tests.return_value = {"returncode": 0, "passed": 1, "failed": 0, "output": "GREEN"}
+            checks.build.return_value = {"returncode": 0}
+            design = self.design("Operation complete")
+            design["requirements"] = {}
+            implement_ui(root / ".arc", design, Mock(), Mock(), {"pages": {}})
+            self.assertEqual(relative.read_text(encoding="utf-8"), existence_suite(design, "home"))
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for browser regression")
+    def test_generated_presence_assertions_reject_wrong_roles_and_missing_names(self):
+        from infrastructure.stages.frontend.ui.testing import existence_suite
+        resolve = subprocess.run(
+            ["node", "-p", "require.resolve('@playwright/test/cli')"],
+            capture_output=True, text=True, encoding="utf-8", timeout=15)
+        if resolve.returncode:
+            self.skipTest("Install @playwright/test or expose it through NODE_PATH")
+        variants = [
+            ("named status", "status", "Operation complete", True, False, "Operation complete"),
+            ("wrong role", "alert", "Operation complete", True, True, "Operation complete"),
+            ("missing name", "status", None, True, True, "Operation complete"),
+            ("role only", "status", None, False, False, "Operation complete"),
+            ("wrong text", "status", "Operation complete", True, True, "Wrong feedback"),
+        ]
+        parts = ['import { test, expect } from "@playwright/test";']
+        for title, role, name, named_design, should_fail, text in variants:
+            html = '<div data-testid="feedback" role="' + role + '"'
+            if name:
+                html += ' aria-label="' + name + '"'
+            html += '>' + text + '<button>Undo</button></div>'
+            html += '<script>window.__ARC_UI_DATA__={page:"home",data:{}}</script>'
+            suite = existence_suite(self.design("Operation complete" if named_design else None), "home")
+            suite = suite.replace('import { test, expect } from "@playwright/test";', '')
+            suite = suite.replace('await page.goto("/");', 'await page.setContent(' + json.dumps(html) + ');')
+            parts.append('test.describe(' + json.dumps(title) + ', () => {')
+            if should_fail:
+                parts.append('test.fail();')
+            parts.extend([suite, '});'])
+        for title, actual_name, should_fail in [
+            ("dynamic name", "Record 42", False),
+            ("dynamic name wrong prefix", "Wrong 42", True),
+        ]:
+            html = '<div data-testid="feedback" role="status" aria-label="' + actual_name + '">' + actual_name + '</div>'
+            html += '<script>window.__ARC_UI_DATA__={page:"home",data:{}}</script>'
+            design = self.design("Record {record.title}")
+            design["elements"]["feedback"]["prop"] = {"label": "Record {record.title}"}
+            suite = existence_suite(design, "home")
+            suite = suite.replace('import { test, expect } from "@playwright/test";', '')
+            suite = suite.replace('await page.goto("/");', 'await page.setContent(' + json.dumps(html) + ');')
+            parts.append('test.describe(' + json.dumps(title) + ', () => {')
+            if should_fail:
+                parts.append('test.fail();')
+            parts.extend([suite, '});'])
+        with TemporaryDirectory(prefix="presence-semantics-") as temporary:
+            root = Path(temporary)
+            (root / "semantics.spec.ts").write_text("\n".join(parts), encoding="utf-8")
+            (root / "playwright.config.cjs").write_text(
+                'module.exports={testDir:__dirname,workers:1,retries:0,timeout:15000,'
+                'expect:{timeout:500},reporter:"json",use:{headless:true}}', encoding="utf-8")
+            result = subprocess.run(
+                ["node", resolve.stdout.strip(), "test", "--config", str(root / "playwright.config.cjs")],
+                cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["stats"]["expected"], 7)
+            self.assertEqual(report["stats"]["unexpected"], 0)
+            self.assertEqual(report["stats"]["skipped"], 0)
 
 
 if __name__ == "__main__":

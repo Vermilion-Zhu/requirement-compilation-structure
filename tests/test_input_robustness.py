@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import patch
 
 from infrastructure.shared.project import runtime_events
-from infrastructure.stages.passes.explore_requirement import collect_images, explore_requirement
+from infrastructure.stages.passes.stage_01_explore_requirement import collect_images, explore_requirement
 from infrastructure.stages.requirements.input_materials import (
     collect_materials, publish_input_snapshot, resolve_images)
 from infrastructure.stages.requirements.tree import RequirementTree
@@ -118,7 +118,7 @@ class ExplorePassTolerance(unittest.TestCase):
                 "        - id: IMG-1\n          reference: assets/gone.png\n")
             (source / "requirements.md").write_text("Additional notes.\n", encoding="utf-8")
             arc = root / "application" / ".arc"
-            with patch("infrastructure.stages.passes.explore_requirement.VisualModel") as model:
+            with patch("infrastructure.stages.passes.stage_01_explore_requirement.VisualModel") as model:
                 requirements = explore_requirement(source, arc)
             model.assert_not_called()
             self.assertEqual(requirements["id"], "ROOT")
@@ -136,7 +136,7 @@ class ExplorePassTolerance(unittest.TestCase):
             (source / "assets").mkdir()
             (source / "assets" / "ok.png").write_bytes(b"png")
             arc = root / "application" / ".arc"
-            with patch("infrastructure.stages.passes.explore_requirement.VisualModel") as model:
+            with patch("infrastructure.stages.passes.stage_01_explore_requirement.VisualModel") as model:
                 model.return_value.analyze.return_value = {"layout": "single page"}
                 explore_requirement(source, arc)
             _, argument = model.return_value.analyze.call_args

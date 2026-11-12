@@ -5,6 +5,7 @@ from pathlib import Path
 
 from infrastructure.stages.database.order import implementation_groups, table_dependencies
 from infrastructure.stages.database.runtime import initializer_source
+from infrastructure.shared.project import runtime_events
 from infrastructure.shared.models.text import TextModel
 from infrastructure.utils.presentation.console import DemoConsole
 from infrastructure.utils.presentation.formatting import format_schema
@@ -60,6 +61,7 @@ def implement_db(arc_dir: Path, pause: bool = False, max_attempts: int = 10, max
         if not (output_dir / required).is_file():
             raise ValueError("Run the project-initialization pass (00) first to initialize the project structure")
     schema = json.loads(source.read_text(encoding="utf-8-sig"))
+    runtime_events.database_schema(schema)
     console = DemoConsole(pause)
     # --- Extension point 05B: dependency-aware table implementation -----------
     # Referenced tables precede dependents. Cyclic groups use forward references;
@@ -145,6 +147,8 @@ def implement_db(arc_dir: Path, pause: bool = False, max_attempts: int = 10, max
             if entry and entry["status"] == "FAILED":
                 failures.report["tasks"][name] = {"status": "GREEN", "initial_failure": entry,
                     "recovered_by": "database runtime repair"}
+        for name in order:
+            runtime_events.interface_implemented("DB-" + name, implementations[name]["path"])
         console.show("Database runtime | GREEN", json.dumps(verified, ensure_ascii=False, indent=2))
     failures.finish()
     return implementations

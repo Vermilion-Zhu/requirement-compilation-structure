@@ -7,7 +7,7 @@ Custom name:   python scripts/package.py --output release.zip
 Requires Git on PATH and a working tree containing the current directory.
 Include .gitignore files, modified files, and non-ignored untracked files.
 Exclude .git metadata and this invocation's output and temporary archive.
-Nested repositories such as arc-bench use their own Git ignore rules.
+Ignored external checkouts and local reference material are excluded.
 Symbolic links are stored as links without traversing their targets.
 """
 

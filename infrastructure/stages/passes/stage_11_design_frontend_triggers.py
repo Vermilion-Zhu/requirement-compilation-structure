@@ -5,6 +5,7 @@ from pathlib import Path
 from infrastructure.stages.frontend.context import load_frontend_context, load_ui_design, behavior_contexts
 from infrastructure.stages.frontend.triggers.synthesis import synthesize_triggers
 from infrastructure.stages.frontend.triggers.design import api_ids, empty_triggers
+from infrastructure.stages.frontend.ui.design import page_elements
 from infrastructure.shared.models.text import TextModel
 from infrastructure.shared.project import runtime_events
 from infrastructure.utils.presentation.console import DemoConsole
@@ -30,7 +31,11 @@ def design_frontend_triggers(input_dir: Path, arc_dir: Path, pause: bool = False
         calls = sorted(api_ids(trigger))
         runtime_events.interface(trigger_id, req_ids=[owner], kind="trigger",
             content=f"{trigger.get('source', '')}.{trigger.get('event', '')} → "
-                f"{', '.join(calls) or 'ui state'}", callees=calls)
+                f"{', '.join(calls) or 'ui state'}", callees=calls,
+            callers=[pid for pid in ui["pages"] if trigger.get("source") in page_elements(ui, pid)])
+        for pid in ui["pages"]:
+            if trigger.get("source") in page_elements(ui, pid):
+                runtime_events.link(pid, callees=[trigger_id])
         for api_id in calls:
             runtime_events.link(api_id, callers=[trigger_id])
     console.show("Step 11 | Trigger design complete", f"Triggers: {len(result['triggers'])}\nSaved: {arc_dir / 'frontend_triggers.json'}\nApplication code and UI/data design were not changed. Step 12 implements triggers through E2E TDD.")

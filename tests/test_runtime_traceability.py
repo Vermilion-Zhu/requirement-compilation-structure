@@ -13,10 +13,10 @@ import unittest
 from unittest.mock import Mock, patch
 
 from infrastructure.shared.project import runtime_events
-from infrastructure.stages.passes.design_frontend_triggers import design_frontend_triggers
-from infrastructure.stages.passes.design_frontend_ui import design_frontend_ui
-from infrastructure.stages.passes.implement_frontend_triggers import implement_frontend_triggers
-from infrastructure.stages.passes.implement_frontend_ui import implement_frontend_ui
+from infrastructure.stages.passes.stage_11_design_frontend_triggers import design_frontend_triggers
+from infrastructure.stages.passes.stage_09_design_frontend_ui import design_frontend_ui
+from infrastructure.stages.passes.stage_12_implement_frontend_triggers import implement_frontend_triggers
+from infrastructure.stages.passes.stage_10_implement_frontend_ui import implement_frontend_ui
 from infrastructure.utils.files import save_json
 
 
@@ -85,6 +85,25 @@ class TraceabilityTestCase(unittest.TestCase):
 
 
 class AdapterRows(TraceabilityTestCase):
+    def test_all_seven_graph_regions_have_typed_evidence(self):
+        runtime_events.database_schema({
+            "entities": {"Note": {"fields": {"id": {"type": "string"}}}},
+            "requirements": {"REQ-1": ["Note.id"]}})
+        runtime_events.interface_implemented("DB-Note", "backend/src/db/tables/Note.sql")
+        for identity, kind in [("UI-home", "page"), ("API-list", "api"), ("TR-open", "trigger")]:
+            runtime_events.interface(identity, req_ids=["REQ-1"], kind=kind, content=identity)
+        for identity, kind in [("ui:home", "ui"), ("api:list", "api"),
+                               ("e2e:home", "e2e"), ("acceptance:home", "acceptance")]:
+            runtime_events.test_case(identity, requirement_id="REQ-1", kind=kind, passed=True)
+        interfaces = table(self.arc, "interfaces")
+        self.assertEqual({r["type"] for r in interfaces.values()}, {"ui", "api", "func", "db"})
+        self.assertEqual({r["type"] for r in table(self.arc, "tests").values()},
+                         {"unit", "integration", "e2e"})
+        self.assertEqual(interfaces["DB-Note"]["req_ids"], ["REQ-1"])
+        self.assertTrue(interfaces["DB-Note"]["implemented"])
+        self.assertEqual(interfaces["DB-Note"]["file_path"], "backend/src/db/tables/Note.sql")
+
+
     def test_interface_rows_keep_owners_content_and_links(self):
         runtime_events.interface("API-a", req_ids=["REQ-1", "REQ-2"], kind="api",
             content="GET /api/a — first", callers=["TR-1"])
@@ -115,7 +134,7 @@ class AdapterRows(TraceabilityTestCase):
         runtime_events.test_case("api:API-a", requirement_id="REQ-1", kind="api",
             file_path="backend/tests/REQ-1/API-a.test.ts", passed=False, interface_ids=["API-a"])
         row = table(self.arc, "tests")["api:API-a"]
-        self.assertEqual((row["req_id"], row["type"], row["passed"]), ("REQ-1", "api", False))
+        self.assertEqual((row["req_id"], row["type"], row["passed"]), ("REQ-1", "integration", False))
         self.assertEqual(row["file_path"], "backend/tests/REQ-1/API-a.test.ts")
         self.assertEqual(row["interface_ids"], ["API-a"])
 
@@ -140,43 +159,57 @@ class AdapterRows(TraceabilityTestCase):
 
 
 class PassHooks(TraceabilityTestCase):
+    def test_schema_pass_registers_real_table_definitions(self):
+        from infrastructure.stages.passes import load_pass
+        module = load_pass("02_build_db_schema")
+        schema = {"entities": {"Note": {"fields": {"id": {"type": "string"}}}},
+                  "requirements": {"REQ-1": ["Note.id"]}}
+        with patch.object(module, "TextModel"), patch.object(module, "DemoConsole"), \
+                patch.object(module, "propose_json", return_value=((schema, "accepted"), {})):
+            module.build_db_schema(self.arc)
+        row = table(self.arc, "interfaces")["DB-Note"]
+        self.assertEqual(row["type"], "db")
+        self.assertEqual(row["req_ids"], ["REQ-1"])
+        self.assertFalse(row["implemented"])
+
+
     def test_design_and_implementation_publish_page_contract_and_ui_suite(self):
-        with patch("infrastructure.stages.passes.design_frontend_ui.TextModel"), \
-                patch("infrastructure.stages.passes.design_frontend_ui.DemoConsole"), \
-                patch("infrastructure.stages.passes.design_frontend_ui.synthesize_ui",
+        with patch("infrastructure.stages.passes.stage_09_design_frontend_ui.TextModel"), \
+                patch("infrastructure.stages.passes.stage_09_design_frontend_ui.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_09_design_frontend_ui.synthesize_ui",
                     return_value=json.loads(json.dumps(DESIGN))):
             design_frontend_ui(self.input, self.arc)
 
         page = table(self.arc, "interfaces")["UI-home"]
-        self.assertEqual((page["type"], page["req_ids"]), ("page", ["REQ-1"]))
+        self.assertEqual((page["type"], page["req_ids"]), ("ui", ["REQ-1"]))
         self.assertEqual(page["content"], "/ → UI-home")
 
         report = {"status": "GREEN", "pages": {"UI-home": {"status": "GREEN", "requirements": ["REQ-1"]}}}
-        with patch("infrastructure.stages.passes.implement_frontend_ui.TextModel"), \
-                patch("infrastructure.stages.passes.implement_frontend_ui.DemoConsole"), \
-                patch("infrastructure.stages.passes.implement_frontend_ui.implement_ui",
+        with patch("infrastructure.stages.passes.stage_10_implement_frontend_ui.TextModel"), \
+                patch("infrastructure.stages.passes.stage_10_implement_frontend_ui.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_10_implement_frontend_ui.implement_ui",
                     return_value=report):
             implement_frontend_ui(self.input, self.arc)
 
         self.assertTrue(table(self.arc, "interfaces")["UI-home"]["implemented"])
         suite = table(self.arc, "tests")["ui:UI-home"]
-        self.assertEqual((suite["req_id"], suite["type"], suite["passed"]), ("REQ-1", "ui", True))
+        self.assertEqual((suite["req_id"], suite["type"], suite["passed"]), ("REQ-1", "unit", True))
         self.assertEqual(suite["file_path"], "frontend/tests/ui/UI-home.spec.ts")
         self.assertEqual(suite["interface_ids"], ["UI-home"])
 
     def test_trigger_design_publishes_contract_and_back_links_called_apis(self):
         runtime_events.interface("API-list", req_ids=["REQ-1"], kind="api",
             content="GET /api/items — List items")
-        with patch("infrastructure.stages.passes.design_frontend_triggers.TextModel"), \
-                patch("infrastructure.stages.passes.design_frontend_triggers.DemoConsole"), \
-                patch("infrastructure.stages.passes.design_frontend_triggers.load_ui_design",
+        with patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.TextModel"), \
+                patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.load_ui_design",
                     return_value=json.loads(json.dumps(DESIGN))), \
-                patch("infrastructure.stages.passes.design_frontend_triggers.synthesize_triggers",
+                patch("infrastructure.stages.passes.stage_11_design_frontend_triggers.synthesize_triggers",
                     return_value=json.loads(json.dumps(INTERACTIONS))):
             design_frontend_triggers(self.input, self.arc)
 
         trigger = table(self.arc, "interfaces")["TR-open"]
-        self.assertEqual((trigger["type"], trigger["req_ids"]), ("trigger", ["REQ-1"]))
+        self.assertEqual((trigger["type"], trigger["req_ids"]), ("func", ["REQ-1"]))
         self.assertEqual(trigger["content"], "UI-home.click → API-list")
         self.assertEqual(trigger["callees"], ["API-list"])
         self.assertEqual(table(self.arc, "interfaces")["API-list"]["callers"], ["TR-open"])
@@ -188,16 +221,17 @@ class PassHooks(TraceabilityTestCase):
         tree.leaves = ["REQ-1"]
         context = (tree, {"entities": {}}, {"apis": {}, "requirements": {}},
             json.loads(json.dumps(DESIGN)), {"triggers": {}, "requirements": {}}, {}, {})
-        process = {"status": "GREEN", "summary": {}, "requirements": {"REQ-1": {"status": "GREEN", "triggers": []}},
+        runtime_events.interface("TR-open", req_ids=["REQ-1"], kind="trigger", content="open")
+        process = {"status": "GREEN", "summary": {}, "requirements": {"REQ-1": {"status": "GREEN", "triggers": ["TR-open"]}},
             "verification": {}}
         acceptance = {"status": "GREEN", "requirements": {"REQ-1": {"status": "GREEN"}}}
-        with patch("infrastructure.stages.passes.implement_frontend_triggers.load_e2e_context",
+        with patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.load_e2e_context",
                     return_value=context), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.TextModel"), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.DemoConsole"), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.run_trigger_tdd",
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.TextModel"), \
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.DemoConsole"), \
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.run_trigger_tdd",
                     return_value=process), \
-                patch("infrastructure.stages.passes.implement_frontend_triggers.run_independent_acceptance",
+                patch("infrastructure.stages.passes.stage_12_implement_frontend_triggers.run_independent_acceptance",
                     return_value=acceptance):
             implement_frontend_triggers(self.input, self.arc)
 
@@ -205,7 +239,9 @@ class PassHooks(TraceabilityTestCase):
         self.assertEqual(tests["e2e:REQ-1"]["type"], "e2e")
         self.assertEqual(tests["e2e:REQ-1"]["file_path"], "frontend/tests/e2e/REQ-1.spec.ts")
         self.assertTrue(tests["e2e:REQ-1"]["passed"])
-        self.assertEqual(tests["acceptance:REQ-1"]["type"], "acceptance")
+        self.assertEqual(tests["e2e:REQ-1"]["interface_ids"], ["TR-open"])
+        self.assertTrue(table(self.arc, "interfaces")["TR-open"]["implemented"])
+        self.assertEqual(tests["acceptance:REQ-1"]["type"], "e2e")
         self.assertTrue(tests["acceptance:REQ-1"]["file_path"].startswith("frontend/tests/e2e/acceptance/"))
         self.assertTrue(tests["acceptance:REQ-1"]["passed"])
         self.assertEqual(table(self.arc, "node_states")["REQ-1"]["state"], "PASSED")
