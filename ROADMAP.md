@@ -20,6 +20,13 @@
 | 读取拒绝 | 0 | 0 |
 | 壳 / 语义 | `7 global elements`，navigation=1 | `4 global elements`，navigation=1 |
 
+最近两轮（`breadcrumb_fixed_*`，M4 重放前）：
+
+| 任务 | 外部 | 总耗时 | 内部状态 | 关键问题 |
+| --- | --- | --- | --- | --- |
+| keep | 8/11 | 4798 s | 13/13 DONE，冒烟 GREEN | 设计仍是 `alert`、无 `state`；status / `aria-pressed` 缺口未消 |
+| stackoverflow | 9/27 | 19068 s | 13/13 DONE，内部全 GREEN | 入口 `/` 无 Question feed、导航名/角色不符；18 条失败全为 10 s 超时 |
+
 已交付能力（对应提交）：E2E 服务器复用与静默（`9e0d778`→`4e91345`）、
 义务账本 D1（`533e04e`）、语义 IR role/name（`4672e4d`）、全局壳（`66a5900`）。
 
@@ -91,6 +98,34 @@
 
 结论：**需求里写清楚了，是 IR/提示词在传递中丢掉了**。补齐 `state`/`aria` 与显式 role 传递后，
 这类任务应能到 11/11；具体失败清单仍建议向平台确认后回填本节。
+
+## 4b. 入口路由与导航契约缺口（2026-11-13 stackoverflow）
+
+**现象**：外部 9/27；18 条失败全部是 `Test timeout of 10000ms exceeded`，且都从 `entry` / `login` /
+`mainNav` 开始。内部 backend 85/85、UI 28/28、E2E 25/25 全绿。
+
+**本地复现**（构建产物 + 起服务 + Playwright 探针）：
+
+| 检查 | 结果 |
+| --- | --- |
+| `/questions` | `Question feed`、`Ask Question`、题目按钮都在 |
+| `/login` → 提交 `stack_user` | 登录成功，banner 显示 `Stack User` |
+| `/` 与登录后的跳转 | 只有 `<h1>Home</h1>`，**没有 Question feed** |
+| 导航 | 有一个 `navigation`，名字是 `Primary navigation`；子项是 `<a>` 链接 |
+| 需求 | "reload the returned homepage … Question feed appears"；"Follow Questions in Main navigation" |
+
+**根因**：
+
+1. **入口路由没有建模**：设计只有 8 个页面（`/questions`、`/login`、…），没有 route `/`；
+   实现里留了一个内联占位 `HomePage`。外部 `entry` / `login` helper 在 `/` 等 Question feed，
+   于是 18 条用例全部 10 s 超时。内部存在性测试只覆盖设计页面，所以全绿。
+2. **命名地标不保真**：需求写 "Main navigation"，设计与应用用 "Primary navigation"，按名字定位会落空。
+3. **导航项角色与外部契约相反**：外部 `action(mainNav(page),'Questions')` 按 button 找；应用渲染的是链接。
+   书栈任务的需求明确写 "Books link in navigation"（link 正确），stackoverflow 写 "Follow Questions…"（button），
+   说明角色必须由需求措辞决定，不能一律按 link。
+
+**结论**：这是一个可泛化的缺口——"应用入口路由"和"需求里命名的地标/角色"没有进入设计与验收；
+补上"入口页 + 命名地标保真 + 提交前语义探针"可以同时覆盖这两个任务类别。
 
 ## 5. 助教扩展点（`infrastructure/stages/passes/`，共 14 处）
 
@@ -171,6 +206,35 @@
 - **回退原因**：bookstack 外部 11/12 → 3/11。产物显示该轮把面包屑建模成 3 个页面级 `navigation` 地标，每个都含 "Books" 链接；外部 `go()` 的 `getByRole('navigation').filter(has link 'Books').getByRole('link', {name:'Books'})` 因此解析到 2 个元素（全局壳 + 面包屑），9 条用例 strict-mode 失败。语义字段本身不是直接原因，而是「面包屑是 navigation」这一既有提示词遇上外部定位假设；已先加导航地标守卫（见 §9），M4 待守卫验证后重放。
 - **风险**：提示词影响其他任务 → 下一轮对比 bookstack + keep 两次运行。
 - **关联**：TA 03A/03C；轨道 B。
+
+### 批次 2.5：入口路由与语义前置校验（最高优先，2026-11-13 新增）
+
+#### M8 入口路由建模（`/` homepage）
+
+- **目标**：需求描述的"homepage / landing / feed"必须是设计中的一个真实页面（route `/`），
+  不是实现里的占位 Home。
+- **改动**：设计提示词要求"应用入口路由是一个页面；若需求说 homepage / Question feed appears，
+  该页面承载主集合"；`semantic_issues` 增加"需求提到 homepage/feed 但设计没有 route `/`"；
+  实现提示词禁止保留占位首页。
+- **验收**：stackoverflow 的 `/` 渲染 Question feed；内部存在性测试覆盖 `/`；外部 `entry`/`login` 不再超时。
+
+#### M9 命名地标与导航角色保真
+
+- **目标**：需求里命名的地标（如 "Main navigation"）与角色描述（`"X"(role=button)`）必须原样进入 IR。
+- **改动**：设计提示词强调地标名逐字保留；新增校验：从需求文本抽取 `"NAME"(role=ROLE)` 与
+  `<name> navigation` 类命名，检查设计元素存在对应 name/role；导航项角色规则改为
+  "需求称其为 link 才用 link；否则切换视图的导航项用 button"（书栈 "Books link" → link，
+  stackoverflow "Follow Questions" → button）。
+- **验收**：stackoverflow 导航名 = "Main navigation"、Questions 为 button；书栈仍为 link 且 12/12。
+
+#### M10 提交前语义探针（preflight probe）
+
+- **目标**：在提交前用真实浏览器验证"需求声明 + 壳 + 入口"这些内部测试看不到的契约。
+- **改动**：新增脚本（可放 `scripts/`），从 requirements 抽取 `"X"(role=Y)`、地标名与入口页预期，
+  对本地构建产物跑一次 Playwright 断言：入口路由内容、命名地标、角色、关键页面区域。
+  失败即阻止提交并输出缺失清单。
+- **验收**：能对 `breadcrumb_fixed_stackoverflow` 产物报出"`/` 无 Question feed、导航名不符、Questions 角色不符"；
+  下一次提交前 0 失败。
 
 ### 批次 3：质量与装配（2 天）
 
@@ -255,6 +319,9 @@
 | D1 账本在无前端证据时过早 `RESOLVED`（第 11 阶段即 103/103） | 待修：`Implemented` 需要前端证据或明确"无 UI" |
 | 壳上的交互（登录/退出等）未进入 trigger 设计 | 待设计：壳元素纳入 trigger 范围 |
 | 面包屑被建模成第二个 navigation 地标（外部 strict mode 冲突） | ✅ 已修：提示词禁止第二地标 + `semantic_issues` 报告重复链接 |
+| 入口路由 `/` 未建模，实现用占位 Home（stackoverflow 9/27 主因） | M8 |
+| 命名地标/导航角色与需求不符（Primary vs Main navigation、link vs button） | M9 |
+| 内部测试看不到入口/壳语义，提交前无保护 | M10 |
 | 内部测试仍只断言 testid | 暂缓（M4 之后） |
 | `install_dependencies` 失败重试 | ✅ M1 已修（同一 manifest 不重试） |
 | 语义告警只打印不修复 | M4 |
@@ -262,6 +329,23 @@
 | keep 的 3 条外部失败未与平台清单对照 | 待补 |
 
 ## 10. 运行记录（append-only）
+
+### 2026-11-13 · stackoverflow（breadcrumb_fixed_stackoverflow）9/27
+
+- 总 19068 s（5.3 h）、535 次模型调用；13/13 DONE；内部 backend 85/85、UI 28/28、E2E 25/25 全绿。
+- 外部 9/27；18 条失败全部是 `Test timeout of 10000ms exceeded`，都从 `entry` / `login` / `mainNav` 开始。
+- 本地探针：`/questions` 正常、登录成功；但 `/` 只有 "Home" 标题，无 Question feed；
+  导航名 "Primary navigation"（需求 "Main navigation"），导航项为链接（外部按 button 取）。
+- 设计没有 route `/` 页面，实现保留内联占位 HomePage；内部测试只覆盖设计页面，因此全绿。
+- 阶段耗时：12=8460 s、08=3179 s、10=2033 s、11=1621 s；失败检查 19 后端 + 11 UI + 26 E2E。
+- 结论：入口路由 + 导航名/角色是主因；先做 M8/M9/M10，再继续 M3/M5/M6。
+
+### 2026-11-13 · keep（breadcrumb_fixed_keep）8/11
+
+- 总 4798 s；阶段 11=1026 s、08=828 s、12=1528 s；7 后端 + 2 UI + 7 E2E 失败。
+- 设计仍是 `alert=2`、0 个 state（M4 未重放），外部 8/11 与上次一致，缺口仍是 status / `aria-pressed`。
+- 待 M4 重放后的下一轮复跑验证。
+
 
 ### 2026-11-06 · bookstack（semantics_enhanced）
 
