@@ -62,7 +62,15 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
-### 2.9 第九轮：M4 重放（导航守卫之后）
+### 2.10 第十轮：入口路由与命名地标/导航角色（M8、M9）
+
+| 项 | 问题 | 改动 |
+| --- | --- | --- |
+| **入口路由** | stackoverflow 外部 9/27：/ 只有占位 Home，没有 Question feed；内部测试只覆盖设计页面 | 设计/实现提示词要求入口路由是真实页面；semantic_issues 在需求提到 homepage 而设计无 route / 时报告 |
+| **命名地标与导航角色** | 需求写 "Main navigation"/"Follow Questions"，设计与实现却是 "Primary navigation" + link，外部 helper 按 button 定位全部 10s 超时 | 抽取需求 "X"(role=Y)、定点 navigation、Follow X in Navigation 校验；导航项角色规则改为"需求称 link 才用 link，否则 button"；修复回合接收这些契约；status/alert 与 link/button 的 type 自动纠正 |
+| **验证** | — | 在 readcrumb_fixed_stackoverflow 产物上报出导航名、Questions 角色、缺首页；在 keep 产物上报出 alert/status 冲突；全量 308 tests |
+
+
 
 | 项 | 内容 |
 | --- | --- |

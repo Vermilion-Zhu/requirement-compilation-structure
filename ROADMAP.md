@@ -209,7 +209,7 @@
 
 ### 批次 2.5：入口路由与语义前置校验（最高优先，2026-11-13 新增）
 
-#### M8 入口路由建模（`/` homepage）
+#### M8 入口路由建模（`/` homepage）✅ 2026-11-13
 
 - **目标**：需求描述的"homepage / landing / feed"必须是设计中的一个真实页面（route `/`），
   不是实现里的占位 Home。
@@ -217,8 +217,9 @@
   该页面承载主集合"；`semantic_issues` 增加"需求提到 homepage/feed 但设计没有 route `/`"；
   实现提示词禁止保留占位首页。
 - **验收**：stackoverflow 的 `/` 渲染 Question feed；内部存在性测试覆盖 `/`；外部 `entry`/`login` 不再超时。
+- **已完成**：入口路由提示词；`semantic_issues(design, requirement_text)` 会报告"需求提到 homepage 但设计没有 route `/`"。在 `breadcrumb_fixed_stackoverflow` 产物上已触发该告警。
 
-#### M9 命名地标与导航角色保真
+#### M9 命名地标与导航角色保真✅ 2026-11-13
 
 - **目标**：需求里命名的地标（如 "Main navigation"）与角色描述（`"X"(role=button)`）必须原样进入 IR。
 - **改动**：设计提示词强调地标名逐字保留；新增校验：从需求文本抽取 `"NAME"(role=ROLE)` 与
@@ -226,6 +227,7 @@
   "需求称其为 link 才用 link；否则切换视图的导航项用 button"（书栈 "Books link" → link，
   stackoverflow "Follow Questions" → button）。
 - **验收**：stackoverflow 导航名 = "Main navigation"、Questions 为 button；书栈仍为 link 且 12/12。
+- **已完成**：需求契约校验（`"X"(role=Y)`、定点 navigation、Follow X in Navigation）、导航项角色规则、status/alert 的 type 纠正；在 stackoverflow 产物上报出导航名与 Questions 角色问题，在 keep 产物上报出 `"Note archived"(role=status)` 与 alert 的冲突。
 
 #### M10 提交前语义探针（preflight probe）
 
@@ -276,6 +278,25 @@
 | SQL 下沉实验 | 05A/05C：DDL 生成与纠错 | TA 05A/05C |
 | 内部断言升级 | 存在性测试断言 role/name（暂缓） | M4 后续 |
 
+### 实验轨道 E1：用户流优先的内部测试压缩（暂不实现）
+
+**观察**：内部测试按 UI / trigger / API 粒度组织，外部测试是需求级用户流（登录 → 切换页面 → 输入 → 保存 → 重载）；
+入口页、壳地标、跨阶段状态这类问题内部测试看不到，同时检查与修复轮次带来大量开销
+（stackoverflow：321 次检查 / 5426 s，73 次 E2E 运行，535 次模型调用）。
+
+**可行性判断**：部分可行，目标是"换粒度"而不是"减覆盖"。
+
+| 处理 | 对象 | 理由 |
+| --- | --- | --- |
+| 可替换 | pass 10 的逐页 testid 存在性测试 → 每页一条**语义 smoke**（入口内容/地标/区域/关键动作，用 role+name） | 与外部测试同构，直接覆盖入口/壳/命名地标 |
+| 可合并 | pass 12 的"过程 E2E + 独立验收"两套 → 一套需求级用户流 + 一条跨需求 journey（登录→创建→重载→编辑→删除/撤销） | 当前两套重复，且都缺少跨需求流程 |
+| 可压缩 | typecheck 每轮一次而非每次检查；后端 HTTP 测试按需求合并；失败后只重跑受影响需求 | stackoverflow tsc 131 次 / 622 s、E2E 73 次 |
+| 必须保留 | pass 08 后端 API 测试、类型检查、构建 | 定位精确、成本低；删掉会把错误后移到更贵的阶段 |
+| 风险与缓解 | 流级测试定位差、生成测试可能过约束 | 用 M10 需求探针做提交前兜底；断言按本次创建的 id/title 作用域 |
+
+**实验设计**：同一任务（keep、stackoverflow、bookstack）做 A/B，比较外部通过率、总墙钟、检查耗时、模型调用与失败检查数；
+目标外部不降、墙钟下降 ≥20%、检查耗时下降 ≥30%。排在 M10 之后执行；**本轮不实现**。
+
 ## 7. 分工建议（3 人）
 
 | 轨道 | 负责内容 | 里程碑 | 依赖 |
@@ -322,6 +343,7 @@
 | 入口路由 `/` 未建模，实现用占位 Home（stackoverflow 9/27 主因） | M8 |
 | 命名地标/导航角色与需求不符（Primary vs Main navigation、link vs button） | M9 |
 | 内部测试看不到入口/壳语义，提交前无保护 | M10 |
+| 内部测试粒度为 UI/trigger/API，与外部用户流不同构，跨阶段问题覆盖不足且开销大 | E1 实验（暂不实现） |
 | 内部测试仍只断言 testid | 暂缓（M4 之后） |
 | `install_dependencies` 失败重试 | ✅ M1 已修（同一 manifest 不重试） |
 | 语义告警只打印不修复 | M4 |
