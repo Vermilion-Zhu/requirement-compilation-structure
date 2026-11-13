@@ -42,6 +42,10 @@ implemented earlier or later. Never declare a second header or primary navigatio
 page component. Use the shell element IDs as their data-testid values and render their
 declared roles. If the shell does not exist yet when you begin, add it to the entrypoint
 before finishing; if it exists, extend it instead of duplicating it.
+The designed page for route "/" is the application entry page: render its real content there
+and never leave a placeholder Home route. Preserve declared landmark names exactly (a "Main navigation" landmark must not become
+"Primary navigation") and render primary-navigation entries with their declared role:
+a button entry stays a button even when it switches the view.
 
 Choose component-local state, a shared store or another appropriate mechanism. Initialize
 safe unloaded values and explicit requirement defaults in application code; never manufacture

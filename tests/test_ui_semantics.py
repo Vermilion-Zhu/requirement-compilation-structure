@@ -327,6 +327,82 @@ class RepairRound(unittest.TestCase):
         self.assertIn("UI-breadcrumb-books", updated["elements"])
 
 
+class RequirementContracts(unittest.TestCase):
+    def setUp(self):
+        self.tree = RequirementTree(deepcopy(TREE_DOCUMENT))
+        self.design = normalize_design({
+            "pages": {"home": {"name": "Home", "route": "/", "root": "UI-home", "images": []}},
+            "elements": {
+                "UI-nav": {"type": "container", "role": "navigation", "name": "Primary navigation",
+                    "scope": "global", "parent": None, "prop": {}},
+                "UI-nav-questions": {"type": "link", "role": "link", "parent": "UI-nav",
+                    "prop": {"label": "Questions", "href": "/questions"}},
+                "UI-home": {"type": "page", "parent": None, "prop": {}},
+                "UI-feedback": {"type": "alert", "role": "alert", "parent": "UI-home",
+                    "prop": {"label": "Action undone"}},
+            },
+            "requirements": {"REQ-1": ["UI-home"]}, "steps": {},
+        }, self.tree)
+
+    def issues(self, text, design=None):
+        return semantic_issues(design or self.design, text)
+
+    def test_a_quoted_status_role_names_the_element_to_fix(self):
+        issues = self.issues('"Action undone"(role=status)')
+        self.assertTrue(any("UI-feedback" in issue and "role 'status'" in issue and "'alert'" in issue
+            for issue in issues), issues)
+
+    def test_a_quoted_placeholder_example_is_not_a_literal_name(self):
+        self.assertFalse(any("registered email" in issue
+            for issue in self.issues('"<registered email>"(role=button)')))
+
+    def test_a_template_name_satisfies_a_concrete_example(self):
+        design = deepcopy(self.design)
+        design["elements"]["UI-profile"] = {"type": "button", "role": "button", "parent": None,
+            "name": "{displayName}", "prop": {}}
+        normalized = normalize_design(design, self.tree)
+        self.assertFalse(any("Stack User" in issue
+            for issue in self.issues('"Stack User"(role=button)', normalized)))
+
+    def test_follow_in_navigation_names_the_landmark_and_the_entry_role(self):
+        issues = self.issues("Follow Questions in Main navigation.")
+        self.assertTrue(any("UI-nav" in issue and "Main navigation" in issue for issue in issues), issues)
+        self.assertTrue(any("UI-nav-questions" in issue and "role button" in issue for issue in issues), issues)
+
+    def test_an_unrelated_navigation_phrase_does_not_name_the_landmark(self):
+        self.assertFalse(any("navigation" in issue
+            for issue in self.issues("Workspace navigation")))
+
+    def test_visible_navigation_uses_the_noun_as_the_landmark_name(self):
+        design = deepcopy(self.design)
+        design["elements"]["UI-nav"]["name"] = "Sidebar"
+        normalized = normalize_design(design, self.tree)
+        self.assertFalse(any("navigation" in issue
+            for issue in self.issues("a visible Sidebar navigation", normalized)))
+
+    def test_a_homepage_requirement_needs_an_entry_route(self):
+        self.assertFalse(any("homepage" in issue
+            for issue in self.issues("reload the returned homepage")))
+        design = deepcopy(self.design)
+        design["pages"]["home"]["route"] = "/start"
+        normalized = normalize_design(design, self.tree)
+        self.assertTrue(any("route '/'" in issue
+            for issue in self.issues("reload the returned homepage", normalized)))
+
+    def test_the_repair_round_receives_requirement_contracts(self):
+        def repair(instructions, request):
+            self.assertTrue(any("role 'status'" in issue for issue in request["issues"]))
+            return {"elements": {"UI-feedback": {"type": "status", "role": "status",
+                "parent": "UI-home", "mode": [], "data": [], "prop": {"label": "Action undone"}}}}
+
+        updated = repair_semantics(self.design, self.tree, Mock(generate_json=repair), Mock(),
+            '"Action undone"(role=status)')
+        self.assertEqual(updated["elements"]["UI-feedback"]["role"], "status")
+        self.assertEqual(updated["elements"]["UI-feedback"]["type"], "status")
+        self.assertFalse(any("UI-feedback" in issue
+            for issue in semantic_issues(updated, '"Action undone"(role=status)')))
+
+
 class PromptRules(unittest.TestCase):
     def test_prompt_states_the_accessibility_contract(self):
         for phrase in ("ACCESSIBILITY CONTRACT", "role button", "role navigation",
@@ -339,6 +415,17 @@ class PromptRules(unittest.TestCase):
                 "Only the shell declares the", "primary navigation"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, INSTRUCTIONS)
+
+    def test_the_design_prompt_models_the_entry_route_and_named_landmarks(self):
+        for phrase in ("application entry route", "Main navigation",
+                "role button, even though it switches the view"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, INSTRUCTIONS)
+
+    def test_the_implementation_prompt_keeps_the_entry_route_and_landmark_names(self):
+        self.assertIn("never leave a placeholder Home route", IMPLEMENTATION)
+        self.assertIn("Main navigation", IMPLEMENTATION)
+        self.assertIn("button entry stays a button", IMPLEMENTATION)
 
     def test_the_implementation_prompt_has_the_same_exception(self):
         self.assertIn("must not become a second", IMPLEMENTATION)

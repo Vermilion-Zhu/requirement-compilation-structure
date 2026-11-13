@@ -1,6 +1,7 @@
 """Canonical UI/data records and incremental design updates."""
 
 from copy import deepcopy
+import re
 
 
 
@@ -53,6 +54,11 @@ every page shares. Design it once, not once per page.
   as a container of links, not as a second navigation landmark. Only the shell declares the
   primary navigation landmark, unless the original requirement explicitly requires a
   breadcrumb navigation landmark.
+- The application entry route "/" is a page like any other. When the requirement describes a
+  homepage or landing page, or says the primary collection appears there, model that page
+  with route "/" and its real content. Never leave the entry route to a placeholder page.
+- When the requirement names a landmark (for example "Main navigation"), use that exact
+  accessible name; do not paraphrase it as "Primary navigation".
 The request lists the current shell; keep it consistent across requirements.
 
 ACCESSIBILITY CONTRACT
@@ -68,6 +74,9 @@ For unspecified roles, choose by behavior:
   groups the links is role navigation only for the shell's primary navigation; page-level
   breadcrumbs and section switchers stay role container so the application exposes exactly
   one primary navigation landmark per page.
+- A primary-navigation entry is role link only when the requirement calls it a link (for
+  example "a named link in navigation"); an entry the requirement says to follow or click in
+  the navigation is role button, even though it switches the view.
 - A group of records or items is role region with an explicit name. Success and
   informational notices are role status; errors and interruption warnings are role alert.
   A form is role form, and every input declares textbox, checkbox or combobox and is
@@ -79,13 +88,17 @@ states an ARIA state (for example pressed, current, expanded, selected, checked)
 recorded in element.state even when the styling does not show it; do not leave a stated
 state to the implementation's discretion.
 Preserve explicitly required accessible names. Visible wording and accessible names are
-separate properties. For status/alert feedback identified by specific message text, default
+separate properties. Landmark names are contracts too: if the requirement names a navigation,
+banner or region (for example "Main navigation"), use that exact accessible name; never
+paraphrase it. For status/alert feedback identified by specific message text, default
 name to that message unless the requirement specifies another name or leaves it unnamed.
 For different messages, use separate elements with their own name, text and visibility.
 Exclude child action captions from feedback names. Other names are chosen where needed.
 name and prop.label are templates: use {var} for a current-record value, for example
 {note.title}. Preserve the exact required template without adding object-type prefixes.
-The implementation substitutes the actual value on every render.
+The implementation substitutes the actual value on every render. Data-driven names (profile
+display names, record titles) use the same template form; a concrete example
+from the requirement is not a literal element name.
 
 pages maps PAGE IDs to {name, route, root, images}. route is a URL path, root is an
 ELEMENT ID and images lists supplied image IDs. Preserve explicit image.page hints.
@@ -216,6 +229,8 @@ def normalize_design(design, tree):
         kind = str(node.get("type") or "").strip().lower()
         if declared in {"button", "link"} and kind in {"button", "link"} and declared != kind:
             node["type"] = declared
+        elif declared in {"alert", "status"} and kind in {"alert", "status"} and declared != kind:
+            node["type"] = declared
         name = node.get("name")
         if isinstance(name, str) and name.strip():
             node["name"] = name.strip()
@@ -295,7 +310,110 @@ def _subtree(elements: dict, uid: str) -> set[str]:
     return selected
 
 
-def semantic_issues(design: dict) -> list[str]:
+QUOTED_ROLE = re.compile(r'"([^"\n]{1,80})"\s*\(role=([a-z][a-z-]*)\)')
+NAMED_NAVIGATION = re.compile(
+    r"(?:\bin\b|\bvisible\b|\bnamed\b|\blabeled\b|\blabelled\b|\bon\b)\s+"
+    r"(?:the\s+)?([A-Z][A-Za-z]{1,20})\s+navigation\b")
+FOLLOW_NAVIGATION = re.compile(
+    r'Follow\s+"?([A-Z][A-Za-z0-9 {}\-]{1,60}?)"?\s+in\s+(?:the\s+)?([A-Z][A-Za-z]{1,20})\s+navigation')
+# "Main navigation" is a compound landmark name; "Sidebar navigation" names the sidebar.
+GENERIC_NAVIGATION_WORDS = {"main", "primary", "global", "application", "app", "site",
+    "top", "bottom", "left", "right"}
+ROLE_ALIASES = {"textbox": {"textbox", "searchbox"}, "searchbox": {"searchbox", "textbox"}}
+
+
+def requirement_text_of(tree) -> str:
+    """Flatten requirement names, descriptions and steps for contract checks."""
+    parts = []
+    for record in tree.requirements.values():
+        parts.append(str(record.get("name") or ""))
+        parts.append(str(record.get("description") or ""))
+    for record in tree.steps.values():
+        for key in ("Given", "When", "Then"):
+            value = record.get(key)
+            if isinstance(value, str) and value.strip():
+                parts.append(value)
+    return "\n".join(parts)
+
+
+def _navigation_name(phrase: str) -> str:
+    """Use the full compound name for generic words, otherwise the noun before "navigation"."""
+    phrase = phrase.strip()
+    return phrase + " navigation" if phrase.lower() in GENERIC_NAVIGATION_WORDS else phrase
+
+
+def _elements_named(design: dict, name: str) -> list[tuple[str, str]]:
+    """Return (element id, role) for every element exposing the accessible name."""
+    return [(uid, str(node.get("role") or "")) for uid, node in design["elements"].items()
+        if _accessible_name(node) == name]
+
+
+def requirement_contract_issues(design: dict, requirement_text: str) -> list[str]:
+    """Report requirement-stated names, roles, landmarks and the entry route missing from design."""
+    if not requirement_text:
+        return []
+    issues = []
+    elements = design["elements"]
+    def role_matches(actual: str, expected: str) -> bool:
+        return actual == expected or actual in ROLE_ALIASES.get(expected, set())
+
+    def templated(role: str) -> bool:
+        return any(role_matches(str(node.get("role") or ""), role)
+            and any(marker in _accessible_name(node) for marker in ("{", "<"))
+            for node in elements.values())
+
+    for match in QUOTED_ROLE.finditer(requirement_text):
+        name, role = match.group(1).strip(), match.group(2)
+        if any(marker in name for marker in ("<", ">")):
+            continue  # the requirement uses a placeholder example, not a literal name
+        candidates = _elements_named(design, name)
+        if not candidates:
+            # A requirement example ("Stack User") may stand for a record-driven name.
+            if templated(role):
+                continue
+            issues.append(f"design: requirement names {name!r} (role={role}) but no element exposes it")
+            continue
+        if not any(role_matches(actual, role) for _, actual in candidates):
+            uid, actual = candidates[0]
+            issues.append(f"{uid}: requirement names {name!r} as role {role!r} but this element is {actual!r}")
+    navigations = {_accessible_name(node): uid for uid, node in elements.items()
+        if node.get("role") == "navigation" and _accessible_name(node)}
+    for match in NAMED_NAVIGATION.finditer(requirement_text):
+        required = _navigation_name(match.group(1))
+        if required in navigations:
+            continue
+        if len(navigations) == 1:
+            name, uid = next(iter(navigations.items()))
+            issues.append(f"{uid}: requirement names the navigation {required!r} "
+                f"but this element is named {name!r}")
+        elif navigations:
+            issues.append(f"design: requirement names a navigation {required!r} "
+                "but no navigation uses that name")
+        else:
+            issues.append(f"design: requirement names a navigation {required!r} "
+                "but the design has none")
+    for match in FOLLOW_NAVIGATION.finditer(requirement_text):
+        item = match.group(1).strip().rstrip('"')
+        required = _navigation_name(match.group(2))
+        candidates = _elements_named(design, item)
+        if not candidates:
+            issues.append(f"design: requirement follows {item!r} in {required!r} "
+                "but no element exposes it")
+            continue
+        if any(role == "button" for _, role in candidates):
+            continue
+        uid, actual = candidates[0]
+        issues.append(f"{uid}: requirement follows {item!r} in {required!r}, "
+            f"so it must be role button (this element is {actual!r})")
+    if re.search(r"\b(homepage|home page|landing page|entry route|entry page)\b",
+            requirement_text, re.I):
+        routes = {str(page.get("route") or "").split("?")[0] for page in design["pages"].values()}
+        if not routes.intersection({"/", ""}):
+            issues.append("design: requirements describe a homepage but no page uses route '/'")
+    return list(dict.fromkeys(issues))
+
+
+def semantic_issues(design: dict, requirement_text: str = "") -> list[str]:
     """Report roles, names or states that cannot be rendered as declared."""
     issues = []
     for uid, node in design["elements"].items():
@@ -343,7 +461,8 @@ def semantic_issues(design: dict) -> list[str]:
         if duplicates:
             issues.append(f"{uid}: navigation repeats the global link(s) {duplicates!r}; "
                 "model breadcrumbs as page content instead of a second navigation landmark")
-    return issues
+    issues.extend(requirement_contract_issues(design, requirement_text))
+    return list(dict.fromkeys(issues))
 
 
 def apply_proposal(design, proposal, rid, tree):

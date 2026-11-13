@@ -7,7 +7,7 @@ components. Prompts and design records live in ui/design.py."""
 import json
 from copy import deepcopy
 
-from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, shell_context, UIResponseError, data_symbols, semantic_issues
+from infrastructure.stages.frontend.ui.design import INSTRUCTIONS, apply_proposal, empty_design, page_elements, normalize_design, page_context, requirement_text_of, shell_context, UIResponseError, data_symbols, semantic_issues
 from infrastructure.stages.frontend.ui.proposals import INSTRUCTIONS as EXAMPLE_INSTRUCTIONS
 from infrastructure.shared.rag.pages import PageRetriever
 from infrastructure.utils.files import save_json
@@ -52,9 +52,9 @@ new elements and do not rename existing records.
 """
 
 
-def repair_semantics(design, tree, model, console):
+def repair_semantics(design, tree, model, console, requirement_text=""):
     """Give the model one chance to repair design warnings the implementation would inherit."""
-    issues = semantic_issues(design)
+    issues = semantic_issues(design, requirement_text)
     if not issues:
         return design
     # Design-level warnings (for example a missing shell) name no element to repair.
@@ -83,7 +83,7 @@ def repair_semantics(design, tree, model, console):
     except (RuntimeError, ValueError) as error:
         print(f"[UI SEMANTICS] repair round skipped: {error}", flush=True)
         return design
-    remaining = semantic_issues(updated)
+    remaining = semantic_issues(updated, requirement_text)
     print(f"[UI SEMANTICS] repaired {len(issues) - len(remaining)} of {len(issues)} issue(s)", flush=True)
     return updated
 
@@ -134,7 +134,8 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
             save_json(arc_dir / "ui_design.json", design)
             console.artifact("ui_design", design, label + " | Accepted UI")
     failures.finish()
-    design = repair_semantics(design, tree, model, console)
+    requirement_text = requirement_text_of(tree)
+    design = repair_semantics(design, tree, model, console, requirement_text)
     normalize_design(design, tree)
     roles = {}
     for node in design["elements"].values():
@@ -142,7 +143,7 @@ def synthesize_ui(arc_dir, tree, images, contexts, model, console, top_k=3, max_
     print("UI semantics: " + ", ".join(f"{role}={count}" for role, count in sorted(roles.items())), flush=True)
     shell = shell_context(design)
     print(f"UI shell: {len(shell['elements'])} global elements, roots={shell['roots']}", flush=True)
-    issues = semantic_issues(design)
+    issues = semantic_issues(design, requirement_text)
     if issues:
         print("UI semantics warnings:" + chr(10) + "  "
             + (chr(10) + "  ").join(issues[:8]), flush=True)
