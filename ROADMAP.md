@@ -229,7 +229,7 @@
 - **验收**：stackoverflow 导航名 = "Main navigation"、Questions 为 button；书栈仍为 link 且 12/12。
 - **已完成**：需求契约校验（`"X"(role=Y)`、定点 navigation、Follow X in Navigation）、导航项角色规则、status/alert 的 type 纠正；在 stackoverflow 产物上报出导航名与 Questions 角色问题，在 keep 产物上报出 `"Note archived"(role=status)` 与 alert 的冲突。
 
-#### M10 提交前语义探针（preflight probe）
+#### M10 提交前语义探针（preflight probe）✅ 2026-11-13
 
 - **目标**：在提交前用真实浏览器验证"需求声明 + 壳 + 入口"这些内部测试看不到的契约。
 - **改动**：新增脚本（可放 `scripts/`），从 requirements 抽取 `"X"(role=Y)`、地标名与入口页预期，
@@ -237,6 +237,14 @@
   失败即阻止提交并输出缺失清单。
 - **验收**：能对 `breadcrumb_fixed_stackoverflow` 产物报出"`/` 无 Question feed、导航名不符、Questions 角色不符"；
   下一次提交前 0 失败。
+- **已完成**：新增 `infrastructure/shared/project/preflight.py` + `preflight_probe.mjs` + `scripts/preflight.py`；
+  从 requirements + accepted design 抽取静态路由页根、命名地标、Follow-in-navigation 角色、`"X"(role=Y)` 契约，
+  启动构建产物并用应用自带的 Playwright 跑真实浏览器检查；failures 阻断、warnings 提示（`--strict` 才阻断）。
+  用法：`uv run python scripts/preflight.py --app output/demo [--json report.json] [--strict]`。
+- **产物验证**：对 `breadcrumb_fixed_stackoverflow` 构建产物报出 3 个失败——
+  `entry / … no region content`、`landmark: navigation "Main navigation" is missing`、
+  `navigation entry "Questions" is a link, expected button`；quoted 控件缺失（登录后才出现）作为 29 条 warning。
+  `tests/test_preflight.py` 覆盖契约抽取、探针输出解析、run 与 CLI 退出码。
 
 ### 批次 3：质量与装配（2 天）
 

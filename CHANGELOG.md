@@ -62,6 +62,15 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
+### 2.11 第十一轮：提交前语义探针（M10）
+
+| 项 | 内容 |
+| --- | --- |
+| 功能 | `scripts/preflight.py --app <构建产物>`：从 `.arc` 的 requirements + ui_design 抽出静态路由页根、命名地标、Follow-in-navigation 角色和 `"X"(role=Y)` 契约，启动应用（或 `--base-url` 复用）并用应用自带 Playwright 在真实浏览器中检查；failures 阻断提交，warnings 需 `--strict` 才阻断 |
+| 设计 | 检查分三层：静态路由页根可见（重定向视为 auth-gated 跳过）、入口 `/` 的区域内容 + 命名地标 + 导航项角色、其它需求控件作为 advisory warning |
+| 验证 | 对 `breadcrumb_fixed_stackoverflow` 构建产物报出 3 个失败（入口无区域、Main navigation 缺失、Questions 是 link）；全量 316 tests |
+| 文件 | `infrastructure/shared/project/preflight.py`、`preflight_probe.mjs`、`scripts/preflight.py`（`.gitignore` 放行）、`tests/test_preflight.py` |
+
 ### 2.10 第十轮：入口路由与命名地标/导航角色（M8、M9）
 
 | 项 | 问题 | 改动 |
@@ -112,7 +121,7 @@
 | **义务散落** | 字段级 R/W 在 `db_obligations`、API 设计、trigger 设计、三份验收报告里各存一半，无法回答"这条数据义务履行了吗"，`Resolved(Ω)` 只能人肉推断 | 新增 `infrastructure/shared/obligations.py`：把 6 份 artifact 投影成 `.arc/obligations.json`，每条记录带稳定的 `OBL-xxxxxxxx` ID、需求/步骤归属、`api`/`trigger` 分配者、`Inferred → Allocated → Verified → Implemented` 状态与测试证据；`Compiler._run` 每次 pass 后重建，摘要写入 `compilation.json` 并打印在收尾面板 |
 | **不改门禁** | — | 纯投影：不改变任何 pass 的通过/失败、提示词或 IR；刷新失败只打印 `[OBLIGATIONS] ledger refresh skipped`，不影响编译 |
 
-测试现状：`308 tests, OK (skipped=49)`。其中 46 条为 legacy 门控，2 条为环境门控
+测试现状：`316 tests, OK (skipped=49)`。其中 46 条为 legacy 门控，2 条为环境门控
 （真实数据库运行时 / Chromium）。`ARC_LEGACY_TESTS=1` 可重新运行 legacy 用例，便于后续移植。
 
 **算法本身没有改动**：pass 顺序、提示词、IR 结构、验证策略与前两版一致。这两轮只保证
