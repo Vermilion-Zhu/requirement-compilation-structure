@@ -7,7 +7,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 import main
-from infrastructure.react_agent.submission import compile_application
+from infrastructure.react_agent.submission import compile_application, partition_contracts
+from infrastructure.react_agent.requirements import compile_requirements
 from infrastructure.react_agent.test_plan import PLAN_INSTRUCTIONS
 from infrastructure.react_agent.browser_tools import prepare_browser
 
@@ -131,6 +132,29 @@ class ReactSubmissionTests(unittest.TestCase):
         self.assertEqual(prepared, cli)
         self.assertEqual(channel, "chrome")
         self.assertFalse(self.output.exists())
+
+    def test_large_test_compilation_batches_preserve_sources_and_cover_every_requirement(self):
+        source = {"id": "ROOT", "description": "Shared original constraints", "children": [
+            {"id": f"R{i}", "description": "Show Hello", "scenarios": [
+                {"name": f"Case {j}", "steps": [{"Given": "Home", "When": "Open", "Then": "Hello"}]}
+                for j in range(6)]} for i in range(3)]}
+        (self.input / "requirements.yaml").write_text(json.dumps(source), encoding="utf-8")
+        _, contracts = compile_requirements(self.input)
+        batches = partition_contracts(contracts)
+        self.assertEqual([batch["implementation_ids"] for batch in batches], [["R0", "R1"], ["R2"]])
+        self.assertTrue(all(batch["contracts"][0]["id"] == "ROOT" for batch in batches))
+        def generate(messages, *args, **kwargs):
+            batch = json.loads(messages[0]["content"])
+            owners = {item["id"]: item["source"] for item in batch["contracts"]}
+            return {"cases": [{**self.plan["cases"][0], "requirement_id": rid, "source": owners[rid]}
+                              for rid in batch["implementation_ids"]]}, {}
+        self.tests.generate.side_effect = generate
+        with patch("infrastructure.react_agent.submission.BrowserSuite.collect",
+                   return_value={"passed": False, "kind": "TEST_SUITE_ERROR"}):
+            report = self.compile()
+        self.assertEqual(report["test_generation"]["batches"], 2)
+        manifest = json.loads((Path(report["evidence"]) / "tests/acceptance-manifest.json").read_text())
+        self.assertEqual({case["requirement_id"] for case in manifest["cases"]}, {"R0", "R1", "R2"})
 
 
 if __name__ == "__main__":

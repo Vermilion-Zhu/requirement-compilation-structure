@@ -11,6 +11,8 @@ Apply website_defaults where the original contract is unspecified. Test feedback
 roles and accessible names separately from their visible text and child actions.
 Honor ui_declarations.container ownership. An action declared inside feedback belongs
 inside that feedback element, whose explicit label keeps its accessible name separate.
+Associate form labels with controls using explicit htmlFor/id pairs, keeping field
+names independent of their current values, including prefilled multiline inputs.
 
 Keep a short progress note in each response. Inspect related files in batches, make
 related edits together, then check the result. You can continue editing before checking.
@@ -19,7 +21,7 @@ Do not replace working functionality with placeholders or remove assertions to p
 Use verify after implementing the requested workflows. It runs checks and returns
 failures for application repair. A passing check completes the run.
 When frozen_acceptance is available, verify runs the supplied independent scenarios.
-Call it as soon as the app is ready for browser testing. Use targeted self-checks
+Use verify for the first browser check. After its feedback, use targeted self-checks
 for debugging and let the frozen suite provide full scenario acceptance.
 
 Return a JSON object with progress (a brief string) and actions (an ordered array).

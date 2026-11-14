@@ -13,6 +13,30 @@ from infrastructure.react_agent.verification import BrowserSuite
 from infrastructure.utils.files import save_json
 
 
+def partition_contracts(contracts: dict, scenario_limit=12) -> list[dict]:
+    """Bound each test proposal while retaining original ancestors and source pointers."""
+    records = {item["id"]: item for item in contracts["contracts"]}
+    groups, current, count = [], [], 0
+    for rid in contracts["implementation_ids"]:
+        weight = max(1, len(records[rid].get("scenarios", [])))
+        if current and count+weight > scenario_limit:
+            groups.append(current)
+            current, count = [], 0
+        current.append(rid)
+        count += weight
+    if current:
+        groups.append(current)
+    batches = []
+    for ids in groups:
+        sources = [records[rid]["source"] for rid in ids]
+        context = [record for record in contracts["contracts"] if any(
+            source == record["source"] or source.startswith(record["source"] + "/") for source in sources)]
+        context_ids = {record["id"] for record in context}
+        batches.append({**contracts, "implementation_ids": ids, "contracts": context,
+            "ui_declarations": [item for item in contracts["ui_declarations"] if item["requirement_id"] in context_ids]})
+    return batches
+
+
 def compile_application(requirements: Path, output: Path, *, playwright_cli: Path | None = None,
                         channel=None, time_budget=900, max_steps=40, test_model=None,
                         implementation_model=None, install=True, checker=None) -> dict:
@@ -41,30 +65,39 @@ def compile_application(requirements: Path, output: Path, *, playwright_cli: Pat
             report["status"] = "COMPILING_TESTS"
         test_model = test_model or ConversationModel()
         before = monotonic()
-        test_deadline = min(deadline, before+180)
-        messages = [{"role": "user", "content": json.dumps(contracts, ensure_ascii=False)}]
-        report["test_generation"] = {"attempts": [],
+        batches = partition_contracts(contracts)
+        test_deadline = min(deadline, before+max(180, min(360, time_budget*.45)))
+        report["test_generation"] = {"attempts": [], "batches": len(batches),
             "model": {key: getattr(test_model, key, None) for key in ("name", "reasoning")}}
-        for attempt in range(1, 3):
-            remaining = test_deadline-monotonic()
-            if remaining <= 0:
-                report["status"] = "TIME_LIMIT"
-                return report
-            plan, usage = test_model.generate(messages, remaining, instructions=PLAN_INSTRUCTIONS)
-            save_json(evidence / f"test-proposal-{attempt}.json", plan)
-            record = {"attempt": attempt, "usage": usage}
-            report["test_generation"]["attempts"].append(record)
-            report["test_generation"]["elapsed_seconds"] = monotonic()-before
-            try:
-                validate_plan(raw, contracts, plan)
-                break
-            except ValueError as error:
-                record["validation_error"] = str(error)
-                if attempt == 2:
-                    raise
-                messages.extend([{"role": "assistant", "content": json.dumps(plan, ensure_ascii=False)},
-                    {"role": "user", "content": json.dumps({"validation_error": str(error),
-                        "instruction": "Correct the test-plan format using the original contracts. Return the complete plan."})}])
+        plan = {"cases": [], "name_resolutions": {}}
+        for index, batch in enumerate(batches, 1):
+            messages = [{"role": "user", "content": json.dumps(batch, ensure_ascii=False)}]
+            for attempt in range(1, 3):
+                remaining = test_deadline-monotonic()
+                if remaining <= 0:
+                    report["status"] = "TIME_LIMIT"
+                    return report
+                proposal, usage = test_model.generate(messages, min(180, remaining), instructions=PLAN_INSTRUCTIONS)
+                prefix = "" if len(batches) == 1 else f"batch-{index}-"
+                save_json(evidence / f"test-proposal-{prefix}{attempt}.json", proposal)
+                record = {"batch": index, "attempt": attempt, "usage": usage}
+                report["test_generation"]["attempts"].append(record)
+                report["test_generation"]["elapsed_seconds"] = monotonic()-before
+                try:
+                    validate_plan(raw, batch, proposal)
+                    break
+                except ValueError as error:
+                    record["validation_error"] = str(error)
+                    if attempt == 2:
+                        raise
+                    messages.extend([{"role": "assistant", "content": json.dumps(proposal, ensure_ascii=False)},
+                        {"role": "user", "content": json.dumps({"validation_error": str(error),
+                            "instruction": "Correct the test-plan format using the original contracts. Return the complete plan."})}])
+            plan["cases"].extend(proposal["cases"])
+            for uid, resolution in proposal.get("name_resolutions", {}).items():
+                if uid in plan["name_resolutions"] and resolution != plan["name_resolutions"][uid]:
+                    raise ValueError("Conflicting accessible-name evidence between test batches")
+                plan["name_resolutions"][uid] = resolution
         manifest = compile_plan(requirements, evidence / "tests", plan)
         (evidence / "test-instructions.txt").write_text(PLAN_INSTRUCTIONS, encoding="utf-8")
         report["test_compiler"] = {key: value for key, value in manifest["compiler"].items() if key != "files"}
