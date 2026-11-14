@@ -12,6 +12,8 @@ Symbolic links are stored as links without traversing their targets.
 """
 
 import argparse
+from hashlib import sha256
+import json
 import os
 from pathlib import Path
 import stat
@@ -30,8 +32,10 @@ def ignored_names(directory: Path, paths: list[Path]) -> set[str]:
     return {os.fsdecode(name) for name in result.stdout.split(b"\0") if name}
 
 
-def package_directory(root: Path, output: Path) -> int:
+def package_directory(root: Path, output: Path, *, engine="staged") -> int:
     """Archive non-ignored entries, replacing the output only on success."""
+    if engine not in {"staged", "react"}:
+        raise ValueError("Unknown execution engine")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(prefix=f".{output.name}.", suffix=".tmp",
             dir=output.parent, delete=False) as temporary:
@@ -46,7 +50,7 @@ def package_directory(root: Path, output: Path) -> int:
             while pending:
                 directory = pending.pop()
                 paths = [path for path in sorted(directory.iterdir())
-                    if path.name != ".git" and path not in excluded]
+                    if path.name != ".git" and path not in excluded and path != root / "agent-release.json"]
                 if not paths:
                     continue
                 ignored = ignored_names(directory, paths)
@@ -68,6 +72,17 @@ def package_directory(root: Path, output: Path) -> int:
                         kind = stat.S_IFMT(path.lstat().st_mode)
                         raise OSError(f"Cannot archive special file {path} (type {kind:#o})")
                     entries += 1
+        with zipfile.ZipFile(temporary_path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+            files = {entry.filename: sha256(archive.read(entry)).hexdigest()
+                     for entry in archive.infolist() if not entry.is_dir()}
+            commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                                    capture_output=True, text=True, check=True).stdout.strip()
+            dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=root,
+                                   capture_output=True, text=True, check=True).stdout.splitlines()
+            manifest = {"schema_version": 1, "engine": engine, "source_commit": commit,
+                        "dirty_paths": dirty, "files": files}
+            archive.writestr("agent-release.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+            entries += 1
         os.replace(temporary_path, output)
     finally:
         temporary_path.unlink(missing_ok=True)
@@ -79,13 +94,15 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-o", "--output", type=Path, default=Path("compiler.zip"),
         help="Output archive path (default: compiler.zip)")
+    parser.add_argument("--engine", choices=("staged", "react"), default="staged",
+        help="Default engine recorded in the release manifest (default: staged)")
     args = parser.parse_args()
     root = Path.cwd().resolve()
     output = args.output.expanduser().resolve()
     print(f"Source: {root}")
     print(f"Archive: {output}")
     try:
-        entries = package_directory(root, output)
+        entries = package_directory(root, output, engine=args.engine)
     except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile) as error:
         parser.exit(1, f"Packaging failed: {error}\n")
     print(f"Created {output} ({entries} entries, {output.stat().st_size:,} bytes)")

@@ -1,6 +1,7 @@
 """Compile supplied requirement structure into source-linked execution contracts."""
 
 from hashlib import sha256
+import json
 from pathlib import Path
 import re
 
@@ -11,6 +12,24 @@ from infrastructure.stages.requirements.tree import RequirementTree
 
 
 DECLARED_ROLE = re.compile(r'["“`]([^"”`\n]+)["”`]\s*\(\s*role\s*=\s*([\w-]+)\s*\)', re.I)
+
+
+def resolve_source(root: dict, source: str):
+    """Resolve the exact JSON pointer used by a compiled requirement citation."""
+    prefix = "requirements.yaml#"
+    if not isinstance(source, str) or not source.startswith(prefix):
+        raise ValueError("Evidence must reference requirements.yaml")
+    pointer = source[len(prefix):]
+    if pointer and not pointer.startswith("/"):
+        raise ValueError("Invalid requirement evidence pointer")
+    value = root
+    for token in pointer.split("/")[1:]:
+        token = token.replace("~1", "/").replace("~0", "~")
+        try:
+            value = value[int(token)] if isinstance(value, list) and token.isdigit() else value[token]
+        except (KeyError, IndexError, TypeError) as error:
+            raise ValueError(f"Requirement evidence does not exist: {source}") from error
+    return value
 
 
 def ui_declarations(contracts: list[dict]) -> list[dict]:
@@ -34,7 +53,8 @@ def ui_declarations(contracts: list[dict]) -> list[dict]:
         for key, value in contract.items():
             if key in {"id", "source", "source_id"}:
                 continue
-            for text, pointer in strings(value, contract["source"] + "/" + key):
+            escaped = str(key).replace("~", "~0").replace("/", "~1")
+            for text, pointer in strings(value, contract["source"] + "/" + escaped):
                 previous = None
                 for match in DECLARED_ROLE.finditer(text):
                     label, role = match.group(1), match.group(2).lower()
@@ -85,8 +105,10 @@ def compile_requirements(directory: Path) -> tuple[dict, dict]:
         contract.update(id=rid, source=f"requirements.yaml#{pointer}")
         contracts.append(contract)
     materials = collect_materials(directory)
+    canonical = json.loads(json.dumps(raw, ensure_ascii=False, default=str))
     compiled = {
         "source_sha256": sha256(original.encode("utf-8")).hexdigest(),
+        "requirement_sha256": sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
         "contracts": contracts,
         "ui_declarations": ui_declarations(contracts),
         "children": tree.children,

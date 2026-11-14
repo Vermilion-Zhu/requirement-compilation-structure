@@ -75,7 +75,8 @@ class Workspace:
                 argv = [*command, *argv[1:]]
             seconds = min(max(float(action.get("timeout", 90)), 1), 120, timeout)
             try:
-                result = capture_process(argv, cwd=self.output, timeout=seconds)
+                result = capture_process(argv, cwd=self.output, timeout=seconds,
+                                         env={"OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": ""})
             except subprocess.TimeoutExpired:
                 return {"returncode": 124, "error": f"Command timed out after {seconds:.1f}s"}
             return {key: result[key] for key in ("returncode", "output", "elapsed_seconds")}

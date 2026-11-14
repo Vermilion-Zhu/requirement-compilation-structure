@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from time import monotonic
 
-from infrastructure.react_agent.requirements import compile_requirements
+from infrastructure.react_agent.requirements import compile_requirements, resolve_source
+from infrastructure.react_agent.provenance import fingerprint
 from infrastructure.react_agent.runner import ConversationModel
 from infrastructure.utils.files import save_json
 
@@ -43,7 +44,7 @@ def generate_tests(requirements: Path, output: Path, *, model=None, timeout=180,
     """Create a new suite and an evidence manifest with one model request."""
     if timeout <= 0:
         raise ValueError("timeout must be positive")
-    _, contracts = compile_requirements(requirements)
+    raw, contracts = compile_requirements(requirements)
     output = output.resolve()
     input_root = requirements.resolve()
     if output.is_relative_to(input_root) or input_root.is_relative_to(output):
@@ -84,12 +85,15 @@ def generate_tests(requirements: Path, output: Path, *, model=None, timeout=180,
         origin = sources[case["requirement_id"]]
         if not isinstance(evidence, str) or not (evidence == origin or evidence.startswith(origin + "/")):
             raise ValueError("Case evidence must point to its original requirement")
+        resolve_source(raw, evidence)
         checks = case.get("ui_checks", [])
         if not isinstance(checks, list) or any(not isinstance(uid, str) or uid not in known_ui for uid in checks):
             raise ValueError("UI checks must reference compiled declaration IDs")
     covered = {case["requirement_id"] for case in cases}
     checked_ui = {uid for case in cases for uid in case.get("ui_checks", [])}
     report = {"status": "GENERATED", "source_sha256": contracts["source_sha256"],
+              "compiler": fingerprint(TEST_INSTRUCTIONS),
+              "requirement_sha256": contracts["requirement_sha256"],
               "cases": cases, "uncovered_requirements": sorted(known-covered),
               "unchecked_ui_declarations": [item for item in contracts["ui_declarations"] if item["id"] not in checked_ui],
               "warnings": result.get("warnings", []), "usage": usage,

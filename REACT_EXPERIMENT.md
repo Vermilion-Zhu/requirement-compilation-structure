@@ -103,6 +103,8 @@ Artifacts live in `OUTPUT/.arc/`
 - `requirements.json` preserves the original structured input.
 - `requirement-contracts.json` indexes clauses, source pointers and UI declarations.
 - `react-session.json` checkpoints the conversation for explicit resume.
+- `framework-manifest.json` fingerprints framework sources, Git commit/worktree and base instructions.
+- `react-instructions.txt` retains the implementation base prompt.
 - `verification/` retains raw Playwright reports, server output and failure artifacts.
 
 The input compiler reuses `RequirementTree` and input-material discovery. It
@@ -131,6 +133,7 @@ and cache differences prevent treating the timing ratio as a controlled speedup.
 | Keep v3 with external repair gate | 10m18s | 17 | 3 | 11/11 |
 | Keep v4 with reusable driver and verify action | 4m40s | 10 | 2 | Generated suite 11/11, original external suite 11/11 |
 | BookStack Lite v1 | 13m13s | 31 | 3 | 12/12 |
+| Keep v6 automatic public entry | 3m46s including test compilation | 8 | 3 | Generated suite 11/11, original external suite 11/11 |
 
 V1 omitted a named status contract. V2 supplied that name on a child element,
 leaving Undo outside the status container. V3 used the source-linked containment
@@ -154,6 +157,15 @@ Artifacts for these experiments are stored under `output/react-experiment/`.
 The local control contains an explicit two-line feedback-container correction
 and is a test-calibration artifact. It is separate from autonomous generation results.
 
+Keep v6 uses the official DeepSeek endpoint and a per-request output cap of 24,000
+tokens in the local budget guard. Its test compilation and collection are included
+in the 225.7-second total. The application phase took 148.5 seconds. The preceding
+v5 automatic-entry trial stopped on a test-plan format error before generating an
+application. The correction clarified declaration target syntax and added one
+bounded format correction. The new frozen suite also passed eleven cases on the
+prepared positive control. Different endpoints and budget controls prevent treating
+these measurements as a controlled comparison with the earlier local runs.
+
 BookStack's first run spent many turns discovering/installing browser tooling.
 The next runner exposes the supplied verification driver's module to local checks
 and presents verification as a normal check/repair action. A second BookStack
@@ -172,5 +184,70 @@ continue independently of the model endpoint.
    task version, dependencies and budget.
 
 Context compaction, run-level events and seven-region traceability need integration.
-The original CLI can be integrated
-after the experimental execution path has broader behavior-level evidence.
+
+## Automatic experimental entry
+
+`main.py REQUIREMENTS --output-dir APPLICATION --engine react` now connects the
+independent test compiler to implementation and verification. A prepared
+`@playwright/test` CLI can be supplied in `REACT_PLAYWRIGHT_CLI`; otherwise the
+entry installs the locally validated 1.55.0 runner outside the application. It uses
+installed Chrome when available or prepares its matching Chromium browser.
+`REACT_BROWSER_CHANNEL=chrome` selects installed Chrome explicitly. `REACT_TIME_BUDGET`
+defaults to 900 seconds and includes test generation and collection as well as
+application generation. `REACT_MAX_STEPS` defaults to 40.
+
+The test model receives the public source-linked contracts in its own context.
+It produces structured browser operations. A fixed backend emits the executable
+cases and their evidence manifest from the same validated case objects. Collection
+checks the actual Playwright inventory before implementation starts. Invalid plan
+format receives at most one correction using its concrete validation error and
+the original contracts. Original proposals are retained even when validation fails.
+
+The test language supports semantic navigation, clicks, hover, input, selection,
+checkbox operations, reload and web-first assertions. Original role annotations,
+names and explicit ownership constrain declaration targets. Original explicit
+accessible naming can override an underspecified default with source evidence.
+Each case starts a fresh application process with a private database. A single
+verification still executes the complete frozen suite, stopping at the first
+failure by default. Selective slice scheduling and independent semantic assertion
+review remain future experiments.
+
+Source-pointer validation establishes that a citation exists. Requirement coverage
+establishes mapped executable cases. Neither check proves the assertions faithfully
+represent every original clause. Calibration against a passing control and known
+defects remains necessary. The hand-authored Keep calibration plan is a compiler
+backend fixture. One early fixture edited a title despite a retain-title clause;
+the reviewed fixture corrects that mistake. Its results do not establish automatic
+test-generation quality.
+
+The public entry has offline tests for source-only test generation, bounded
+correction, collection rejection, shared deadlines and preserved failure reports.
+A wiring control used a prepared positive application and the reviewed hand-authored
+plan. It exercised actual compilation, collection, build, private per-case servers
+and all eleven browser cases in about 48 seconds with zero model calls. This is
+an entrypoint integration check, with application and test design supplied ahead
+of time.
+
+## Version and release tracking
+
+The experimental branch starts from `39eae6b`. Its first pushed checkpoint is
+`513b5fa`. Intermediate application output directories are experimental trials,
+and several trials can exercise the same framework revision. Git checkpoints
+and trial labels therefore have separate identities.
+
+New reports record framework source hashes, base instruction hash, requirement
+hashes, acceptance file hashes and configured model/reasoning. Resumed reports
+retain previous framework identities. Source fingerprints also work in exported
+ZIPs without Git metadata. Historical reports predate these fields, so their
+missing provenance cannot be reconstructed reliably from current files.
+
+`scripts/package.py --engine react --output RELEASE.zip` records the selected
+engine, source commit, dirty paths and packaged file hashes in `agent-release.json`.
+Release validation must check the archive's fixed `main.py` invocation and browser
+tool preparation before the artifact is submitted. Existing root `compiler.zip`
+is an older artifact and does not represent this experiment.
+
+The root entry reads the release manifest to select its default engine. The source
+checkout defaults to the staged engine. A release built with `--engine react` runs
+the experimental pipeline through the platform's fixed command without extra flags.
+Platform-injected model configuration remains authoritative.

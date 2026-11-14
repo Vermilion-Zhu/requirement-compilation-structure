@@ -12,6 +12,7 @@ from urllib.request import ProxyHandler, build_opener
 from uuid import uuid4
 
 from infrastructure.react_agent.prompt import INSTRUCTIONS
+from infrastructure.react_agent.provenance import fingerprint as framework_fingerprint
 from infrastructure.react_agent.requirements import compile_requirements
 from infrastructure.react_agent.tools import Workspace
 from infrastructure.shared.models.text import TextModel, parse_json_object, reasoning_arguments
@@ -41,7 +42,11 @@ class ConversationModel(TextModel):
 def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
     """Check the actual build and a temporary server, cleaning up its entire tree."""
     started = monotonic()
-    build = capture_process([*npm_command(), "run", "build"], cwd=output, timeout=min(timeout, 120))
+    bind = getattr(acceptance, "for_application", None)
+    if callable(bind):
+        acceptance = bind(output)
+    build = capture_process([*npm_command(), "run", "build"], cwd=output, timeout=min(timeout, 120),
+                            env={"OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": ""})
     if build["returncode"]:
         return {"passed": False, "build": build["output"]}
     remaining = timeout - (monotonic() - started)
@@ -53,7 +58,8 @@ def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
     opener = build_opener(ProxyHandler({}))
     with log.open("w+", encoding="utf-8") as stream:
         process = start_process(["node", "backend/dist/server.js"], cwd=output,
-                                env={"PORT": "0", "HOST": "127.0.0.1", "DATABASE_URL": str(artifacts / "test.db")},
+                                env={"PORT": "0", "HOST": "127.0.0.1", "DATABASE_URL": str(artifacts / "test.db"),
+                                     "OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": ""},
                                 stdout=stream, stderr=stream)
         try:
             deadline = monotonic() + min(remaining, 15)
@@ -87,11 +93,17 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
     if output == requirements or output.is_relative_to(requirements) or requirements.is_relative_to(output):
         raise ValueError("Input and output directories must be separate")
     raw, contracts = compile_requirements(requirements)
+    manifest = getattr(acceptance, "manifest", None)
+    if isinstance(manifest, dict):
+        fingerprint = "requirement_sha256" if manifest.get("requirement_sha256") else "source_sha256"
+        if manifest.get(fingerprint) and manifest[fingerprint] != contracts[fingerprint]:
+            raise ValueError("Acceptance suite was compiled for different requirements")
     session_path = output / ".arc/react-session.json"
     session = None
     if resume:
         session = json.loads(session_path.read_text(encoding="utf-8"))
-        if session["source_sha256"] != contracts["source_sha256"]:
+        fingerprint = "requirement_sha256" if session.get("requirement_sha256") else "source_sha256"
+        if session[fingerprint] != contracts[fingerprint]:
             raise ValueError("Requirement source changed; start a new conversation for the new input")
     started = monotonic()
     deadline = started + time_budget
@@ -108,6 +120,12 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
             playwright_module = driver.as_uri()
     report = {"status": "RUNNING", "steps": 0, "model_seconds": 0., "tool_seconds": 0.,
               "usage": {}, "image_calls": 0, "behavior_verified": False}
+    version = framework_fingerprint(INSTRUCTIONS)
+    save_json(arc / "framework-manifest.json", version)
+    (arc / "react-instructions.txt").write_text(INSTRUCTIONS, encoding="utf-8")
+    report["framework"] = {key: value for key, value in version.items() if key != "files"}
+    report["input"] = {key: contracts[key] for key in ("source_sha256", "requirement_sha256")}
+    report["acceptance_source_hashes"] = getattr(acceptance, "hashes", None)
     report["requirements"] = {rid: {"status": "UNVERIFIED"} for rid in contracts["implementation_ids"]}
     messages = [{"role": "user", "content": json.dumps({
         "requirement_contracts": contracts, "application_root": str(output),
@@ -133,13 +151,14 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
         }, ensure_ascii=False)}]
         previous = session["report"]
         report["previous_runs"] = [*previous.get("previous_runs", []),
-            {key: previous.get(key) for key in ("status", "steps", "elapsed_seconds", "usage")}]
+            {key: previous.get(key) for key in ("status", "steps", "elapsed_seconds", "usage", "framework")}]
     trajectory = arc / "react-trajectory.jsonl"
     if not resume:
         trajectory.write_text("", encoding="utf-8")
 
     def save_session():
-        save_json(session_path, {"source_sha256": contracts["source_sha256"], "messages": messages, "report": report})
+        save_json(session_path, {"source_sha256": contracts["source_sha256"],
+            "requirement_sha256": contracts["requirement_sha256"], "messages": messages, "report": report})
 
     def record(event):
         with trajectory.open("a", encoding="utf-8") as stream:
@@ -154,6 +173,7 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
             record({"setup": setup})
             messages.append({"role": "user", "content": json.dumps({"dependency_install": setup})})
         model = model or ConversationModel()
+        report["model"] = {key: getattr(model, key, None) for key in ("name", "reasoning")}
         for step in range(1, max_steps + 1):
             remaining = deadline - monotonic()
             if remaining <= 0:

@@ -12,6 +12,7 @@ defaults, so the documented invocation keeps working unchanged.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import sys
@@ -47,6 +48,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Show detailed model I/O and save per-call prompt/response logs; usage and timing are always shown")
     parser.add_argument("--port", type=int, default=3000,
         help="Default generated backend port and frontend API proxy target (default: 3000)")
+    default_engine = "staged"
+    release = Path(__file__).with_name("agent-release.json")
+    if release.is_file():
+        try:
+            default_engine = json.loads(release.read_text(encoding="utf-8"))["engine"]
+            if default_engine not in {"staged", "react"}:
+                raise ValueError("Unknown release engine")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            parser.error(f"Invalid agent-release.json: {error}")
+    parser.add_argument("--engine", choices=("staged", "react"), default=default_engine,
+        help="Execution engine (default from agent-release.json, otherwise staged)")
     parser.add_argument("--type", dest="task_type",
         default=os.environ.get("ARCBENCH_TASK_TYPE", "").strip() or "web",
         help="ARC-Bench task type; only 'web' is implemented (default: $ARCBENCH_TASK_TYPE or web)")
@@ -95,6 +107,21 @@ def main(argv: list[str] | None = None) -> None:
             f"This agent implements Web tasks ({', '.join(sorted(SUPPORTED_TASK_TYPES))}) only.",
             file=sys.stderr)
         raise SystemExit(1)
+    if args.engine == "react":
+        from infrastructure.react_agent.submission import compile_application
+        try:
+            cli = os.environ.get("REACT_PLAYWRIGHT_CLI", "").strip()
+            report = compile_application(args.requirement_path, args.output_dir,
+                playwright_cli=Path(cli) if cli else None, channel=os.environ.get("REACT_BROWSER_CHANNEL") or None,
+                time_budget=float(os.environ.get("REACT_TIME_BUDGET", "900")),
+                max_steps=int(os.environ.get("REACT_MAX_STEPS", "40")))
+        except KeyboardInterrupt:
+            raise SystemExit(130)
+        except Exception as error:
+            print(f"Experimental ReAct compilation failed: {error}", file=sys.stderr)
+            raise SystemExit(1)
+        print(f"ReAct result {report['status']}. Report saved to {args.output_dir / '.arc/react-submission.json'}")
+        raise SystemExit(0 if report["status"] == "ACCEPTANCE_PASSED" else 1)
     compiler = Compiler(args.requirement_path, args.output_dir, model_log=args.model_log, port=args.port)
     try:
         compiler.compile()

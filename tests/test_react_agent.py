@@ -14,6 +14,7 @@ from infrastructure.react_agent.requirements import compile_requirements
 from infrastructure.react_agent.acceptance import generate_tests
 from infrastructure.react_agent.verification import BrowserSuite, summarize
 from infrastructure.react_agent.tools import Workspace
+from infrastructure.react_agent.provenance import fingerprint
 
 
 class ScriptedModel:
@@ -56,6 +57,29 @@ class ReactAgentTests(unittest.TestCase):
         self.assertEqual((self.output / "hello.txt").read_text(), "hello")
         self.assertEqual(model.requests[0], model.requests[1][:len(model.requests[0])])
         self.assertIn("hello", model.requests[1][-1]["content"])
+
+    def test_report_links_framework_input_prompt_and_acceptance_versions(self):
+        _, report = self.run_agent([{"actions": [{"tool": "verify"}]}], checker=lambda *_: {"passed": True})
+        manifest = json.loads((self.output / ".arc/framework-manifest.json").read_text())
+        self.assertEqual(report["framework"]["source_sha256"], manifest["source_sha256"])
+        self.assertIn("infrastructure/react_agent/runner.py", manifest["files"])
+        self.assertEqual(len(report["input"]["requirement_sha256"]), 64)
+        self.assertIsNone(report["acceptance_source_hashes"])
+        self.assertTrue((self.output / ".arc/react-instructions.txt").is_file())
+
+    def test_source_identity_survives_export_and_changes_with_code_or_prompt(self):
+        root = self.root / "exported"
+        module = root / "infrastructure/react_agent/prompt.py"
+        module.parent.mkdir(parents=True)
+        module.write_text("prompt = 'first'", encoding="utf-8")
+        initial = fingerprint("first", root=root)
+        self.assertEqual(initial, fingerprint("first", root=root))
+        self.assertIsNone(initial["git_commit"])
+        changed_prompt = fingerprint("second", root=root)
+        self.assertEqual(initial["source_sha256"], changed_prompt["source_sha256"])
+        self.assertNotEqual(initial["instructions_sha256"], changed_prompt["instructions_sha256"])
+        module.write_text("prompt = 'second'", encoding="utf-8")
+        self.assertNotEqual(initial["source_sha256"], fingerprint("first", root=root)["source_sha256"])
 
     def test_failed_finish_returns_observation_and_can_repair(self):
         checker = Mock(side_effect=[{"passed": False, "error": "build failed"}, {"passed": True}])
@@ -346,6 +370,49 @@ description: 'Show "Saved"(role=status) with "Undo"(role=button).'
         with self.assertRaisesRegex(ValueError, "source changed"):
             run(self.input, self.output, install=False, resume=True, model=Mock())
         self.assertEqual((self.output / ".arc/requirements.json").read_bytes(), snapshot)
+
+    def test_fail_fast_notice_does_not_hide_the_actual_application_assertion(self):
+        raw = {"stats": {"unexpected": 1, "skipped": 1},
+               "errors": [{"message": "\u001b[31mTesting stopped early after 1 maximum allowed failures.\u001b[39m"}],
+               "suites": [{"specs": [
+                   {"title": "failed", "file": "R.spec.ts", "ok": False,
+                    "tests": [{"results": [{"status": "failed", "error": {"message": "Expected visible"}}]}]},
+                   {"title": "later", "file": "R2.spec.ts", "ok": True,
+                    "tests": [{"results": [{"status": "skipped"}]}]},
+               ]}]}
+        result = summarize(raw, 1)
+        self.assertEqual(result["kind"], "ASSERTION_FAILURE")
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(len(result["runner_notes"]), 1)
+        self.assertEqual(result["cases"][1]["status"], "UNVERIFIED")
+
+    def test_compiled_requirement_fingerprint_ignores_yaml_comments(self):
+        _, before = compile_requirements(self.input)
+        with (self.input / "requirements.yaml").open("a", encoding="utf-8") as stream:
+            stream.write("# formatting-only revision\n")
+        _, after = compile_requirements(self.input)
+        self.assertNotEqual(before["source_sha256"], after["source_sha256"])
+        self.assertEqual(before["requirement_sha256"], after["requirement_sha256"])
+
+    def test_wrong_requirement_version_is_rejected_before_model_or_output(self):
+        model = Mock()
+        acceptance = Mock(manifest={"requirement_sha256": "different"})
+        with self.assertRaisesRegex(ValueError, "different requirements"):
+            run(self.input, self.output, model=model, acceptance=acceptance, install=False)
+        model.generate.assert_not_called()
+        self.assertFalse(self.output.exists())
+
+    def test_expected_business_text_cannot_be_misclassified_as_infrastructure(self):
+        raw = {"stats": {"unexpected": 1}, "suites": [{"specs": [{"title": "message", "file": "R.spec.ts", "ok": False,
+            "tests": [{"results": [{"status": "failed", "error": {
+                "message": "Error: expect(locator).toBeVisible() failed\nLocator: getByText('Cannot find module')"}}]}]}]}]}
+        self.assertEqual(summarize(raw, 1)["kind"], "ASSERTION_FAILURE")
+
+    def test_an_application_startup_error_is_returned_for_implementation_repair(self):
+        raw = {"stats": {"unexpected": 1}, "suites": [{"specs": [{"title": "start", "file": "R.spec.ts", "ok": False,
+            "tests": [{"results": [{"status": "failed", "error": {
+                "message": "Error: Application did not start: Cannot find module backend.js"}}]}]}]}]}
+        self.assertEqual(summarize(raw, 1)["kind"], "ASSERTION_FAILURE")
 
 
 if __name__ == "__main__":

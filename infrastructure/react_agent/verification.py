@@ -4,6 +4,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 from infrastructure.utils.files import save_json
@@ -34,18 +35,28 @@ def summarize(report: dict, returncode: int) -> dict:
     for suite in report.get("suites", []):
         visit(suite)
     stats = report.get("stats", {})
-    errors = report.get("errors", [])
+    errors, runner_notes = [], []
+    for error in report.get("errors", []):
+        message = re.sub(r"\x1b\[[0-9;]*m", "", error.get("message", ""))
+        if stats.get("unexpected", 0) and re.fullmatch(r"Testing stopped early after \d+ maximum allowed failures\.", message):
+            runner_notes.append(error)
+        else:
+            errors.append(error)
     passed = returncode == 0 and bool(cases) and all(case["passed"] for case in cases) and bool(stats.get("expected")) and not any(
         stats.get(key, 0) for key in ("unexpected", "skipped", "flaky")) and not errors
-    detail = json.dumps([errors, *[case["errors"] for case in cases]], ensure_ascii=False)
-    infrastructure = any(marker in detail for marker in (
-        "ERR_NETWORK_ACCESS_DENIED", "Executable doesn't exist", "browserType.launch", "Cannot find module"))
+    error_records = [*errors, *(error for case in cases for error in case["errors"])]
+    headlines = [re.sub(r"\x1b\[[0-9;]*m", "", error.get("message", "")).strip().split("\n", 1)[0]
+                 for error in error_records]
+    infrastructure = any(re.search(
+        r"^(?:Error:\s*)?(?:browserType\.launch|Cannot find module|Executable doesn't exist|ERR_NETWORK_ACCESS_DENIED|page\.goto:.*ERR_NETWORK_ACCESS_DENIED)",
+        headline) for headline in headlines)
     kind = "ACCEPTANCE_PASSED" if passed else "ASSERTION_FAILURE"
     if errors or not cases:
         kind = "TEST_SUITE_ERROR"
     if infrastructure:
         kind = "CHECK_ENVIRONMENT_ERROR"
-    return {"passed": passed, "kind": kind, "stats": stats, "cases": cases, "errors": errors}
+    return {"passed": passed, "kind": kind, "stats": stats, "cases": cases, "errors": errors,
+            "runner_notes": runner_notes}
 
 
 class BrowserSuite:
@@ -69,11 +80,15 @@ class BrowserSuite:
                 for path in self.directory.rglob("*") if path.is_file() and
                 not any(part in {"node_modules", ".git"} for part in path.relative_to(self.directory).parts)}
 
+    def for_application(self, root: Path):
+        """Bind the application root without sharing mutable run state across checks."""
+        return lambda url, artifacts, timeout: self(url, artifacts, timeout, application_root=root.resolve())
+
     def collect(self, artifacts: Path, timeout: float = 30) -> dict:
         """Check executable case inventory against the compiler's evidence manifest."""
         return self("http://127.0.0.1:9", artifacts, timeout, collect_only=True)
 
-    def __call__(self, url: str, artifacts: Path, timeout: float, *, collect_only=False) -> dict:
+    def __call__(self, url: str, artifacts: Path, timeout: float, *, collect_only=False, application_root=None) -> dict:
         artifacts = artifacts.resolve()
         if self.snapshot() != self.hashes:
             return {"passed": False, "kind": "TEST_SUITE_CHANGED", "error": "Frozen acceptance files changed"}
@@ -89,12 +104,16 @@ class BrowserSuite:
         path.write_text("module.exports=" + json.dumps(config), encoding="utf-8")
         modules = str(self.cli.parents[2])
         node_path = os.pathsep.join(filter(None, (modules, os.environ.get("NODE_PATH"))))
+        environment = {"NODE_PATH": node_path, "OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": "",
+                       "ARC_TEST_APPLICATION_ROOT": ""}
+        if application_root:
+            environment["ARC_TEST_APPLICATION_ROOT"] = str(application_root)
         try:
             command = ["node", str(self.cli), "test", "--config", str(path), "--reporter=json"]
             if collect_only:
                 command.append("--list")
             process = capture_process(command,
-                                      cwd=artifacts, timeout=timeout, env={"NODE_PATH": node_path})
+                                      cwd=artifacts, timeout=timeout, env=environment)
         except subprocess.TimeoutExpired:
             return {"passed": False, "kind": "CHECK_TIMEOUT", "error": "Acceptance execution timed out"}
         (artifacts / "playwright.raw.json").write_text(process["stdout"], encoding="utf-8")
