@@ -143,6 +143,8 @@ class ReactSubmissionTests(unittest.TestCase):
         batches = partition_contracts(contracts)
         self.assertEqual([batch["implementation_ids"] for batch in batches], [["R0", "R1"], ["R2"]])
         self.assertTrue(all(batch["contracts"][0]["id"] == "ROOT" for batch in batches))
+        self.assertTrue(all(batch["contracts"] == contracts["contracts"] for batch in batches))
+        self.assertTrue(all(batch["ui_declarations"] == contracts["ui_declarations"] for batch in batches))
         def generate(messages, *args, **kwargs):
             batch = json.loads(messages[0]["content"])
             owners = {item["id"]: item["source"] for item in batch["contracts"]}

@@ -179,15 +179,20 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
             if remaining <= 0:
                 break
             report["steps"] = step
+            preflight = resume and step == 1
             before = monotonic()
             try:
-                reply, usage = model.generate(messages, remaining)
+                if preflight:
+                    reply, usage = {"progress": "Controller checking resumed application", "actions": [{"tool": "verify"}]}, {}
+                else:
+                    reply, usage = model.generate(messages, remaining)
             except ValueError as error:
                 messages.append({"role": "user", "content": json.dumps({"format_error": str(error)})})
                 record({"step": step, "format_error": str(error)})
                 continue
             finally:
-                report["model_seconds"] += monotonic() - before
+                if not preflight:
+                    report["model_seconds"] += monotonic() - before
             for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
                 report["usage"][key] = report["usage"].get(key, 0) + usage.get(key, 0)
             for parent, field in (("prompt_tokens_details", "cached_tokens"),
@@ -195,10 +200,12 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
                 value = (usage.get(parent) or {}).get(field)
                 if isinstance(value, int):
                     report["usage"][field] = report["usage"].get(field, 0) + value
-            messages.append({"role": "assistant", "content": json.dumps(reply, ensure_ascii=False)})
-            record({"step": step, "reply": reply, "usage": usage})
+            messages.append({"role": "user" if preflight else "assistant", "content": json.dumps(reply, ensure_ascii=False)})
+            record({"step": step, "origin": "controller" if preflight else "model", "reply": reply, "usage": usage})
             print(f"[REACT] {step}/{max_steps} | {monotonic()-started:.1f}s | {reply.get('progress', '')}", flush=True)
             actions = reply.get("actions")
+            if actions == [] and acceptance is not None:
+                actions = [{"tool": "verify"}]
             if not isinstance(actions, list) or not actions or len(actions) > 20:
                 actions = [{"tool": "invalid"}]
             observations = []

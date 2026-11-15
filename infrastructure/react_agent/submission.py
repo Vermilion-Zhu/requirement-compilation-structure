@@ -14,7 +14,7 @@ from infrastructure.utils.files import save_json
 
 
 def partition_contracts(contracts: dict, scenario_limit=12) -> list[dict]:
-    """Bound each test proposal while retaining original ancestors and source pointers."""
+    """Bound requested output while retaining complete prerequisite and UI context."""
     records = {item["id"]: item for item in contracts["contracts"]}
     groups, current, count = [], [], 0
     for rid in contracts["implementation_ids"]:
@@ -26,15 +26,7 @@ def partition_contracts(contracts: dict, scenario_limit=12) -> list[dict]:
         count += weight
     if current:
         groups.append(current)
-    batches = []
-    for ids in groups:
-        sources = [records[rid]["source"] for rid in ids]
-        context = [record for record in contracts["contracts"] if any(
-            source == record["source"] or source.startswith(record["source"] + "/") for source in sources)]
-        context_ids = {record["id"] for record in context}
-        batches.append({**contracts, "implementation_ids": ids, "contracts": context,
-            "ui_declarations": [item for item in contracts["ui_declarations"] if item["requirement_id"] in context_ids]})
-    return batches
+    return [{**contracts, "implementation_ids": ids} for ids in groups]
 
 
 def compile_application(requirements: Path, output: Path, *, playwright_cli: Path | None = None,

@@ -357,11 +357,28 @@ description: 'Show "Saved"(role=status) with "Undo"(role=button).'
         self.run_agent([{"actions": [{"tool": "write", "path": "saved.txt", "content": "original"}]}], max_steps=1)
         model = ScriptedModel([{"actions": [{"tool": "verify"}]}])
         report = run(self.input, self.output, model=model, install=False, resume=True,
-                     checker=lambda *_: {"passed": True})
+                     checker=Mock(side_effect=[{"passed": False, "error": "Recheck saved application"}, {"passed": True}]))
         self.assertIn("original", json.dumps(model.requests[0]))
         self.assertEqual(report["previous_runs"][0]["status"], "STEP_LIMIT")
         self.assertGreaterEqual(report["total_elapsed_seconds"], report["elapsed_seconds"])
         self.assertEqual((self.output / "saved.txt").read_text(), "original")
+
+    def test_resume_supplies_current_failure_before_requesting_model_actions(self):
+        self.run_agent([{"actions": [{"tool": "write", "path": "saved.txt", "content": "original"}]}], max_steps=1)
+        model = ScriptedModel([{"actions": [{"tool": "verify"}]}])
+        checker = Mock(side_effect=[{"passed": False, "error": "Current suite fails on prefilled field"}, {"passed": True}])
+        report = run(self.input, self.output, model=model, install=False, resume=True, checker=checker)
+        self.assertIn("Current suite fails on prefilled field", json.dumps(model.requests[0]))
+        self.assertEqual(checker.call_count, 2)
+        self.assertEqual(report["status"], "BUILD_AND_STARTUP_PASSED")
+
+    def test_empty_actions_with_frozen_acceptance_run_actual_verification(self):
+        checker = Mock(return_value={"passed": False, "error": "Still broken"})
+        _, report = self.run_agent([{"actions": [], "progress": "Complete"}], max_steps=1,
+                                   acceptance=lambda *_: None, checker=checker)
+        checker.assert_called_once()
+        self.assertEqual(report["status"], "STEP_LIMIT")
+        self.assertFalse(report["behavior_verified"])
 
     def test_resume_rejects_changed_original_requirements(self):
         self.run_agent([{"actions": [{"tool": "write", "path": "saved.txt", "content": "original"}]}], max_steps=1)
