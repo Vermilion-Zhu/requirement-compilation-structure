@@ -37,8 +37,14 @@ function locate(scope: Page | Locator, target: Target, variables: Record<string,
 }
 
 export async function execute(page: Page, plan: CasePlan, declarations: Record<string, Declaration>, applicationURL?: string): Promise<void> {
-  const variables = Object.fromEntries(Object.entries(plan.variables ?? {}).map(([key, item]) =>
-    [key, item.unique ? `${item.value} [${randomUUID()}]` : item.value]));
+  const variables = Object.fromEntries(Object.entries(plan.variables ?? {}).map(([key, item]) => {
+    if (!item.unique) return [key, item.value];
+    const identity = randomUUID();
+    const value = item.value.includes("${unique}")
+      ? item.value.replaceAll("${unique}", identity.replaceAll("-", ""))
+      : `${item.value} [${identity}]`;
+    return [key, value];
+  }));
   for (const step of plan.steps) {
     if (step.op === "goto") {
       const path = interpolate(step.url!, variables);

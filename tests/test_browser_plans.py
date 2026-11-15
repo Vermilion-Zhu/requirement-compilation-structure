@@ -104,6 +104,21 @@ description: 'Click Save to show "Saved"(role=status) with "Undo"(role=button). 
         self.assertEqual(plan, original)
         self.assertFalse((self.root / "tests").exists())
 
+    def test_legacy_email_normalization_preserves_literals_and_original_input(self):
+        plan = self.plan()
+        plan["cases"][0]["variables"] = {
+            "email": {"value": "new_stack_user+signup@example.com", "unique": True},
+            "seed": {"value": "stack_user@example.com"},
+            "title": {"value": "A note", "unique": True},
+            "invalid": {"value": "malformed-address"},
+        }
+        original = deepcopy(plan)
+        cases = validate_plan(self.raw, self.contracts, plan)
+        self.assertEqual(cases[0]["variables"]["email"]["value"], "new_stack_user+signup+${unique}@example.com")
+        for key in ("seed", "title", "invalid"):
+            self.assertEqual(cases[0]["variables"][key], original["cases"][0]["variables"][key])
+        self.assertEqual(plan, original)
+
     def test_source_pointers_resolve_escaped_dictionary_keys_and_list_indexes(self):
         source = {"a/b": {"~key": [{"Then": "observable"}]}}
         self.assertEqual(resolve_source(source, "requirements.yaml#/a~1b/~0key/0/Then"), "observable")
@@ -207,6 +222,46 @@ document.querySelector('#undo').onclick=()=>{document.querySelector('#feedback')
                 result = resolved_suite(url, self.root / name, 45)
                 with self.subTest(variant=name):
                     self.assertTrue(result["passed"], result)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    @unittest.skipUnless(os.environ.get("REACT_BROWSER_TESTS") == "1", "Enable REACT_BROWSER_TESTS for live browser checks")
+    def test_unique_email_values_preserve_browser_validation(self):
+        (self.input / "requirements.yaml").write_text("id: R\ndescription: Accept valid emails and reject malformed addresses.\n", encoding="utf-8")
+        cases = []
+        for title, value, unique, expected in [
+            ("Legacy email", "new_stack_user+signup@example.com", True, "Valid"),
+            ("Explicit template", "user+${unique}@example.com", True, "Valid"),
+            ("Negative example", "malformed-address", False, "Invalid"),
+        ]:
+            cases.append({"requirement_id": "R", "source": "requirements.yaml#/description", "title": title,
+                "variables": {"email": {"value": value, "unique": unique}}, "steps": [
+                    {"op": "goto", "url": "/"},
+                    {"op": "fill", "target": {"role": "textbox", "name": "Email"}, "value": "${email}"},
+                    {"op": "expect", "target": {"role": "textbox", "name": "Email"}, "check": "value", "value": "${email}"},
+                    {"op": "expect", "target": {"text": expected}, "check": "visible"}]})
+        directory = self.root / "email-suite"
+        compile_plan(self.input, directory, {"cases": cases})
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b'''<input aria-label="Email" type="email" oninput="document.querySelector('output').textContent=this.validity.valid?'Valid':'Invalid'"><output></output>'''
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *_):
+                pass
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            suite = BrowserSuite(directory, Path(os.environ["REACT_PLAYWRIGHT_CLI"]),
+                                 channel=os.environ.get("REACT_BROWSER_CHANNEL"), max_failures=0)
+            result = suite(f"http://127.0.0.1:{server.server_port}", self.root / "email-results", 60)
+            self.assertTrue(result["passed"], result)
+            self.assertEqual(result["stats"]["expected"], 3)
         finally:
             server.shutdown()
             server.server_close()

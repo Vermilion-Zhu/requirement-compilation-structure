@@ -21,14 +21,21 @@ Return {"cases":[{"requirement_id":"...","source":"requirements.yaml#/...",
 "title":"...","variables":{"title":{"value":"example","unique":true}},"steps":[...]}]}.
 Cover every implementation_id with real assertions. Each case must independently prepare
 its own records through the UI. Use variables for isolated identities and reference them
-as ${title} in strings. Literal content variables can omit unique. Keep actions grounded
-in original Given/When/Then outcomes. Cover identity, rejection and reload when required.
+as ${title} in strings. Literal content variables can omit unique.
+For format-constrained values, place ${unique} inside a valid value template, such as
+user+${unique}@example.com with unique=true. The marker becomes hexadecimal identity
+text, while ordinary unique titles receive a bracketed suffix. Preserve field format,
+length limits and negative test data. Fixed seed credentials must remain literal.
+Keep actions grounded in original Given/When/Then outcomes. Cover identity, rejection
+and reload when required.
 Start each case with goto using the original entry path.
 
 Steps have op and relevant fields. goto uses url (same-origin path), reload has no target.
 Other steps use target. A target is {role,name}, {text}, or {declaration:"UI-id"}.
-Targets can have within with another target. Role/name matching is exact. Prefer compiled
-UI declarations, which enforce their declared ownership and default accessible names.
+Targets can have within with another target. Role/name matching is exact.
+Scope submit actions to the original named form or dialog. Check uniqueness within the
+scope required by the original clause.
+Prefer compiled UI declarations, which enforce declared ownership and default accessible names.
 Declaration targets omit name. If a declaration already supplies container, omit within
 and let the backend apply that ownership. Use within for originally unspecified ownership.
 Declaration templates such as {title} use the case variable named title.
@@ -128,6 +135,12 @@ def validate_plan(raw: dict, contracts: dict, plan: dict) -> list[dict]:
             raise ValueError("Case variables need string values and optional boolean uniqueness")
         if any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", name) for name in variables):
             raise ValueError("Case variable names must be identifiers")
+        for item in variables.values():
+            # Earlier plans used plain email values with unique=true. Preserve the
+            # domain and put their identity inside the address instead of after it.
+            if item.get("unique") and "${unique}" not in item["value"] and re.fullmatch(r"[^\s@]+@[^\s@]+", item["value"]):
+                local, domain = item["value"].split("@")
+                item["value"] = local[:31] + "+${unique}@" + domain
         steps = case.get("steps")
         if not isinstance(steps, list) or not steps:
             raise ValueError("Each case needs steps")
