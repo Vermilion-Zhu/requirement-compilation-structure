@@ -28,7 +28,7 @@ def prepare_browser(directory: Path, timeout: float, *, channel=None) -> tuple[P
         remaining = deadline-monotonic()
         if remaining <= 0:
             raise TimeoutError("Time budget exhausted while preparing the browser runner")
-        result = capture_process(command, cwd=directory, timeout=min(remaining, 120), env=environment)
+        result = capture_process(command, cwd=directory, timeout=min(remaining, 600), env=environment)
         records.append({"argv": command, **result})
         save_json(directory / "bootstrap.json", {"commands": records, "channel": selected})
         if result["returncode"]:

@@ -97,7 +97,7 @@ class BrowserSuite:
         if self.snapshot() != self.hashes:
             return {"passed": False, "kind": "TEST_SUITE_CHANGED", "error": "Frozen acceptance files changed"}
         artifacts.mkdir(parents=True, exist_ok=True)
-        use = {"baseURL": url, "screenshot": "only-on-failure", "trace": "retain-on-failure"}
+        use = {"baseURL": url, "screenshot": "only-on-failure", "trace": "retain-on-failure", "actionTimeout": 10000}
         if self.channel:
             use["channel"] = self.channel
         config = {"testDir": str(self.directory), "testMatch": "*.spec.ts", "workers": 1,

@@ -9,7 +9,9 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-from infrastructure.react_agent.runner import run
+from infrastructure.react_agent.runner import run, request_with_retries
+from openai import APITimeoutError
+import httpx
 from infrastructure.react_agent.requirements import compile_requirements
 from infrastructure.react_agent.acceptance import generate_tests
 from infrastructure.react_agent.verification import BrowserSuite, summarize
@@ -31,6 +33,47 @@ class ScriptedModel:
 
 
 class ReactAgentTests(unittest.TestCase):
+    def test_transient_timeout_retries_the_same_request(self):
+        error = APITimeoutError(request=httpx.Request("POST", "https://example.com"))
+        error.__cause__ = httpx.ReadTimeout("transport timed out")
+        request = Mock(side_effect=[error, "ok"])
+        events = []
+        with patch("infrastructure.react_agent.runner.sleep"):
+            self.assertEqual(request_with_retries(request, 300, events), "ok")
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(len(events), 1)
+
+    def test_dynamic_loop_extends_when_files_changed(self):
+        _, report = self.run_agent([
+            {"actions": [{"tool": "write", "path": "a.txt", "content": "first"}]},
+            {"actions": [{"tool": "write", "path": "b.txt", "content": "second"}]},
+            {"actions": [{"tool": "finish"}]},
+        ], checker=lambda *_: {"passed": True})
+        self.assertEqual(report["status"], "BUILD_AND_STARTUP_PASSED")
+        self.assertEqual(report["steps"], 3)
+
+    def test_identical_writes_do_not_count_as_progress(self):
+        workspace = self.workspace()
+        action = {"tool": "write", "path": "a.txt", "content": "same"}
+        workspace.execute(action, timeout=5)
+        workspace.execute(action, timeout=5)
+        self.assertEqual(workspace.revision, 1)
+
+    def test_transport_retry_exhaustion_preserves_error(self):
+        error = APITimeoutError(request=httpx.Request("POST", "https://example.com"))
+        request = Mock(side_effect=error)
+        events = []
+        with patch("infrastructure.react_agent.runner.sleep"), self.assertRaises(APITimeoutError):
+            request_with_retries(request, 300, events)
+        self.assertEqual(request.call_count, 3)
+        self.assertEqual(len(events), 2)
+
+    def test_nontransient_error_is_not_retried(self):
+        request = Mock(side_effect=ValueError("invalid request"))
+        with self.assertRaises(ValueError):
+            request_with_retries(request, 300, [])
+        self.assertEqual(request.call_count, 1)
+
     def setUp(self):
         self.temporary = TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

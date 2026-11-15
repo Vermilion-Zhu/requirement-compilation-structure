@@ -18,6 +18,8 @@ Keep a short progress note in each response. Inspect related files in batches, m
 related edits together, then check the result. You can continue editing before checking.
 Use real browser/API tests for behavior. A successful build alone proves compilation.
 Do not replace working functionality with placeholders or remove assertions to pass.
+Implement functional workflows first and consult references to resolve specific visual uncertainties.
+Preserve requirement-backed navigation and breadcrumbs when diagnosing ambiguous test locators.
 Use verify after implementing the requested workflows. It runs checks and returns
 failures for application repair. A passing check completes the run.
 When frozen_acceptance is available, verify runs the supplied independent scenarios.

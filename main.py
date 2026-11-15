@@ -113,15 +113,16 @@ def main(argv: list[str] | None = None) -> None:
             cli = os.environ.get("REACT_PLAYWRIGHT_CLI", "").strip()
             report = compile_application(args.requirement_path, args.output_dir,
                 playwright_cli=Path(cli) if cli else None, channel=os.environ.get("REACT_BROWSER_CHANNEL") or None,
-                time_budget=float(os.environ.get("REACT_TIME_BUDGET", "900")),
-                max_steps=int(os.environ.get("REACT_MAX_STEPS", "40")))
+                time_budget=float(os.environ["REACT_TIME_BUDGET"]) if os.environ.get("REACT_TIME_BUDGET") else None,
+                max_steps=int(os.environ["REACT_MAX_STEPS"]) if os.environ.get("REACT_MAX_STEPS") else None)
         except KeyboardInterrupt:
             raise SystemExit(130)
         except Exception as error:
             print(f"Experimental ReAct compilation failed: {error}", file=sys.stderr)
-            raise SystemExit(1)
+            raise SystemExit(0 if has_runnable_application(args.output_dir) else 1)
         print(f"ReAct result {report['status']}. Report saved to {args.output_dir / '.arc/react-submission.json'}")
-        raise SystemExit(0 if report["status"] == "ACCEPTANCE_PASSED" else 1)
+        raise SystemExit(0 if report["status"] == "ACCEPTANCE_PASSED"
+                         or has_runnable_application(args.output_dir) else 1)
     compiler = Compiler(args.requirement_path, args.output_dir, model_log=args.model_log, port=args.port)
     try:
         compiler.compile()

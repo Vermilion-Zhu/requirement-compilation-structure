@@ -29,6 +29,8 @@ length limits and negative test data. Fixed seed credentials must remain literal
 Keep actions grounded in original Given/When/Then outcomes. Cover identity, rejection
 and reload when required.
 Apply website_defaults to properties the original source leaves unspecified, including action roles.
+After asynchronous submissions, assert the original success state before continuing navigation.
+Scope navigation to its navigation landmark when the same label also occurs in breadcrumbs.
 Start each case with goto using the original entry path.
 
 Steps have op and relevant fields. goto uses url (same-origin path), reload has no target.
@@ -210,8 +212,11 @@ def compile_plan(requirements: Path, output: Path, plan: dict) -> dict:
     source += "const cases: CasePlan[] = " + json.dumps(cases, ensure_ascii=False, indent=2) + ";\n"
     source += "const declarations = " + json.dumps(declarations, ensure_ascii=False, indent=2) + ";\n"
     source += '''for (const plan of cases) {
-  test(plan.requirement_id + " / " + plan.title, async ({ applicationURL, page }) => {
-    await execute(page, plan, declarations, applicationURL);
+  test.describe(() => {
+    test.setTimeout((30 + 2 * plan.steps.length) * 1000);
+    test(plan.requirement_id + " / " + plan.title, async ({ applicationURL, page }) => {
+      await execute(page, plan, declarations, applicationURL);
+    });
   });
 }
 '''
@@ -222,7 +227,7 @@ def compile_plan(requirements: Path, output: Path, plan: dict) -> dict:
               "requirement_sha256": contracts["requirement_sha256"],
               "cases": [{"requirement_id": case["requirement_id"], "source": case["source"],
                          "file": "acceptance.spec.ts", "title": case["requirement_id"] + " / " + case["title"],
-                         "ui_checks": case["ui_checks"]} for case in cases],
+                         "ui_checks": case["ui_checks"], "step_count": len(case["steps"])} for case in cases],
               "uncovered_requirements": [], "files": {}}
     used = {uid for case in cases for uid in case["ui_checks"]}
     report["unchecked_ui_declarations"] = [item for item in contracts["ui_declarations"] if item["id"] not in used]

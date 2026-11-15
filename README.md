@@ -1,6 +1,6 @@
 # Requirement Compiler Lite
 
-本分支面向 ArcBench 网站生成任务，将 `requirements.yaml`、Given/When/Then 验收场景和参考图转换为 React + Express + SQLite 应用。当前 Agent 开发候选版本展示为 **Lite 0.1.0a2**，开发分支为 `experiment/react-lite`。
+本分支面向 ArcBench 网站生成任务，将 `requirements.yaml`、Given/When/Then 验收场景和参考图转换为 React + Express + SQLite 应用。当前 Agent 开发候选版本展示为 **Lite 0.1.0a3**，开发分支为 `experiment/react-lite`。
 
 轻量引擎使用保留原文的需求契约、独立生成的浏览器测试和单会话 ReAct 实现循环。当前送测路径采用结构化测试计划，控制器将计划编译为 Playwright 并冻结后交给实现 Agent 验收。普通 Playwright 源码生成处于可行性实验阶段。
 
@@ -14,6 +14,8 @@
 | BookStack Lite 从零生成 | 一轮总耗时 369.6 秒，自动测试 12/12，另存外部测试 10/12 |
 | BookStack 0.1.0a1 平台生成 | 自测 12/12，外部 6/12；原包本地复现同样为 6/12，定位到 Edit 和 New Page 的角色差异 |
 | BookStack Lite 0.1.0a2 从零生成 | DeepSeek 官方 low，新生成应用自测 12/12、固定外部测试 12/12；生成约 574 秒，含外部评估总计约 629 秒，平台回送待验证 |
+| BookStack 完整版 0.1.0a3 从零生成 | 最新完整需求，DeepSeek 官方 low，19 个实现循环，总计 1191.219 秒，自生成冻结测试 35/35，0 跳过；完整平台成绩待送测 |
+| 完整版产物执行 Lite 外部套件 | 9/12，3 条在编辑器 placeholder 定位超时；Lite 明文要求对应 placeholder，完整版文字只规定 textbox 及其名称，套件输入版本存在差异 |
 | StackOverflow Lite 从零生成 | 触及 900 秒总时限，状态为 TIME_LIMIT |
 | StackOverflow 已有应用全量检查 | 经人工校准的冻结计划为 21 通过、6 失败、0 跳过 |
 | 框架与入口回归 | 56 项通过 |
@@ -21,6 +23,10 @@
 | 0.1.0a1 导出检查 | 既有应用的构建与 Keep 外部 11 例回归通过，固定入口选择轻量引擎的接线检查通过 |
 
 这些运行采用不同阶段的框架检查点。每项成绩对应自己的输入、模型配置、测试版本和运行记录。外部测试保存在本地回放目录，Keep 套件的独立官方来源仍待核实。BookStack Lite 的 12 个场景和完整 BookStack 的 35 个场景分别记录。
+
+0.1.0a3 完整版输入来自 2026-11-15 收到的完整需求包，含 24 项实现需求、35 个文字验收场景。测试先从原始需求独立生成并冻结，应用从空脚手架生成。本轮第一次验收为 2 通过、1 失败、32 未执行，Agent 自动修复后 35 条全过。生成测试对原生 checkbox 额外要求了 aria-checked 属性，导致一次额外修复，测试语言的状态断言仍有精简空间。本轮没有调用图像模型，视觉还原程度尚未单独评估。报告保存在本机 `output/bookstack-full-policy-a3-fresh/.arc/`。
+
+已有 Lite 外部套件在生成结束后执行，应用源码前后哈希一致。3 条失败均经过 `getByPlaceholder('Page title')` 或 `getByPlaceholder('Write your page content here...')`。Lite 原文包含 “also exposed with those placeholders”，完整任务原文未包含这项文字约束。保留交叉检查的 9/12 原始成绩及输入差异说明，报告为 `output/bookstack-full-policy-a3-external-subset.json`。
 
 本次平台失败已完成原包复现与框架修正后的从零生成对照。0.1.0a2 的平台回送和其他任务验证继续保留待验证状态。PrestaShop、12306、Ctrip 的真实模型生成仍待执行。上述 StackOverflow 数字描述本地生成测试的执行情况，其中存在测试本身的定位错误。
 
@@ -50,7 +56,11 @@ UI 索引抽取带角色标注的名称，并识别部分明确的容器关系�
 
 ### 用运行记录管理失败和成本
 
-默认整轮上限为 900 秒、40 个实现循环。测试生成、收集和实现共享总期限。失败、超时、步数耗尽、跳过和未执行用例均保留原状态。
+默认依据实现需求数 R 和场景数 S，以 `2R+S` 估算初始实现循环数。到达检查点时，有文件实际变更或验收进展就续期，无进展则停止。该公式仍需跨任务校准。`REACT_TIME_BUDGET` 和 `REACT_MAX_STEPS` 可显式设置整轮期限与循环上限，默认留空。显式期限覆盖测试生成、收集和实现。失败、超时、步数耗尽、跳过和未执行用例均保留原状态。
+
+单次文本请求超时为 300 秒，图像请求为 120 秒，连接错误和临时服务错误最多重试两次，等待 1 秒、2 秒并尊重 Retry-After。重试受显式整轮期限约束。命令上限 300 秒，依赖安装 600 秒，应用启动等待 60 秒。生成测试按 `30+2×动作数` 秒设置用例期限，单个浏览器动作上限 10 秒。同一轮相同图片复用分析结果。
+
+入口检测到可运行应用时会交给平台评测，同时保留内部失败状态和报告。自生成测试通过情况与平台正式成绩分别记录。
 
 本地付费实验使用单独的累计账本和请求前预算守卫。平台运行使用平台注入的模型配置。预算辅助脚本保存在本地忽略目录中。
 
@@ -127,7 +137,7 @@ flowchart LR
 7. `verify` 构建应用，在自动分配的本地端口启动临时服务，检查健康和页面，再执行冻结测试。结构化测试的每个用例使用私有数据库和应用进程。
 8. 失败作为同一会话的观察继续修复。全部用例真实执行且通过时记录 `ACCEPTANCE_PASSED`。进程树由控制器清理。
 
-测试生成的独立期限为 `min(总截止时间, 测试开始时间 + max(180, min(360, 总预算 × 0.45)))`，受整轮截止时间约束。默认测试运行遇到首个失败停止，剩余用例标记为未验证。全量诊断可在开发脚本中设置 `BrowserSuite(max_failures=0)`。
+测试生成遵守显式整轮截止时间，各批次请求使用上述传输超时和重试机制。默认测试运行遇到首个失败停止，剩余用例标记为未验证。全量诊断可在开发脚本中设置 `BrowserSuite(max_failures=0)`。
 
 ## 相对原十三阶段框架的变化
 
@@ -286,11 +296,9 @@ uv run main.py input --output-dir outputs/demo --engine react
 
 首次运行会自动准备 Node Playwright 运行器，可能需要 npm 和浏览器下载网络访问。Python Playwright 和 Node Playwright 各自使用匹配的浏览器版本。
 
-PowerShell 可设置整轮限制，并复用已有 Node Playwright CLI。
+PowerShell 可复用已有 Node Playwright CLI。需要整轮限制时再设置 `REACT_TIME_BUDGET` 和 `REACT_MAX_STEPS`。
 
 ```powershell
-$env:REACT_TIME_BUDGET='900'
-$env:REACT_MAX_STEPS='40'
 $env:REACT_PLAYWRIGHT_CLI='C:/path/to/node_modules/@playwright/test/cli.js'
 $env:REACT_BROWSER_CHANNEL='chrome'
 uv run main.py input --output-dir outputs/demo --engine react
@@ -378,7 +386,7 @@ uv run python scripts/evaluate_react.py input -o outputs/fresh-trial --external-
 
 ### 发布版本、提交和试验轮次
 
-- `pyproject.toml` 的 `project.version` 为 Agent 发布版本的唯一配置来源，采用 PEP 440。当前开发候选为 `0.1.0a2`，已经编号发布的历史版本为 `0.1.0a1`。
+- `pyproject.toml` 的 `project.version` 为 Agent 发布版本的唯一配置来源，采用 PEP 440。当前开发候选为 `0.1.0a3`，历史版本包括 `0.1.0a1` 和 `0.1.0a2`。
 - 每个对外送测版本分配递增版本号。后续提示词、生成逻辑或测试语义调整递增 alpha 序号，较大的架构实验可进入 `0.2.0a1`。
 - 轻量框架统一使用 `Lite` 标识，版本展示如 `Lite 0.1.0a3`，后续标签采用 `lite-v0.1.0a3`。数值版本继续由 `pyproject.toml` 管理。历史标签 `react-v0.1.0a1`、`react-v0.1.0a2` 对应各自的已发布快照。
 - `keep-v6-auto`、`bookstack-v3-auto`、`focused-v6` 是试验目录名称，一次源码版本可以对应多个试验。历史轮次通过原有提交和指纹追踪。

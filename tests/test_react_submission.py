@@ -123,6 +123,35 @@ class ReactSubmissionTests(unittest.TestCase):
             args = main.parse_args([str(self.input), "-o", str(self.output)])
         self.assertEqual(args.engine, "react")
 
+    def test_runnable_timeout_output_is_handed_to_platform_with_truthful_status(self):
+        self.output.mkdir()
+        (self.output / "deploy.sh").touch()
+        (self.output / "package.json").write_text("{}")
+        report = {"status": "TIME_LIMIT"}
+        with patch("infrastructure.react_agent.submission.compile_application", return_value=report):
+            with self.assertRaises(SystemExit) as result:
+                main.main([str(self.input), "-o", str(self.output), "--engine", "react"])
+        self.assertEqual(result.exception.code, 0)
+        self.assertEqual(report["status"], "TIME_LIMIT")
+
+    def test_runnable_output_is_preserved_after_compiler_error(self):
+        self.output.mkdir()
+        (self.output / "deploy.sh").touch()
+        (self.output / "package.json").write_text("{}")
+        with patch("infrastructure.react_agent.submission.compile_application", side_effect=RuntimeError("check failed")):
+            with self.assertRaises(SystemExit) as result:
+                main.main([str(self.input), "-o", str(self.output), "--engine", "react"])
+        self.assertEqual(result.exception.code, 0)
+
+    def test_missing_application_keeps_platform_handoff_failed(self):
+        for error in (None, RuntimeError("generation failed")):
+            with self.subTest(error=error), patch(
+                    "infrastructure.react_agent.submission.compile_application",
+                    return_value={"status": "TIME_LIMIT"}, side_effect=error):
+                with self.assertRaises(SystemExit) as result:
+                    main.main([str(self.input), "-o", str(self.output), "--engine", "react"])
+            self.assertEqual(result.exception.code, 1)
+
     def test_browser_bootstrap_prepares_a_runner_outside_application_without_credentials(self):
         directory = self.root / "browser-tools"
         cli = directory / "node_modules/@playwright/test/cli.js"

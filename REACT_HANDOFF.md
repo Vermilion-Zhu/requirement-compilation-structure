@@ -247,3 +247,40 @@ output/bookstack-platform-20261115/fresh-workflow-controls-v1.evaluation.json。
 统一展示为 Lite，后续版本名称如 Lite 0.1.0a3，ZIP 按 Lite 用途 YYYYMMDD dzs.zip。
 后续 Git 标签采用 lite-v0.1.0a3 形式，数值版本继续由 pyproject.toml 管理。
 历史react-v标签和已发布包通过原有提交、版本与文件指纹定位。
+
+## 完整版需求包核对（2026-11-15）
+
+用户提供 D:/download/se/arcbench-arc-bench-web-requirements.zip，已单独展开到
+E:/D-download/se/arcbench-requirements-web-20261115，保留原包并记录SHA256。
+六项需求的解析内容均与旧 arcbench-requirements 目录不同，后续完整任务使用新目录。
+其中 BookStack 与平台运行88fe25811895包内的原始需求内容一致。
+统计报告位于当前 output/full-requirements-audit-20261115.json。
+实现需求数/场景数分别为 Keep 16/33，BookStack 24/35，StackOverflow 52/66，
+PrestaShop 55/86，12306 93/142，Ctrip 97/152，共165张参考图。
+2R+S仅为待校准的初始循环估算公式，不能把估算值直接当作固定截断规则。
+预算/重试重构已实现，main.py交接退出码修复包含对应回归测试。
+
+## Lite 0.1.0a3 完整 BookStack 验证
+
+默认移除900秒/40循环硬截断，初始循环以2R+S估算，有文件实际变更或验收进展时续期。
+显式REACT_TIME_BUDGET/REACT_MAX_STEPS仍生效。文本请求300秒、图像120秒，临时错误最多重试两次。
+安装600秒，普通命令300秒，生成测试用例30+2×动作数秒，浏览器动作10秒。
+图像分析在同轮按内容哈希复用，需求中的异步完成状态与导航定位范围加入测试编译提示。
+已有应用交给平台评测时保留内部真实状态，避免内部超时直接阻止第三阶段。
+
+本轮使用新完整BookStack输入，从空目录生成，产物output/bookstack-full-policy-a3-fresh。
+自生成冻结测试35/35，0跳过，19个实现循环，整轮1191.219秒，应用阶段1010.265秒。
+测试编译3个批次共168.875秒，依赖安装175.391秒，图像调用0次，传输重试0次。
+第一次验收2过1失败32未执行，失败为测试额外要求原生checkbox具有aria-checked属性，Agent自动补充后通过。
+测试状态断言的语义仍有精简空间。完整平台35条可执行脚本尚未取得，当前35/35为自测成绩。
+需求文本35条场景齐全，已按各需求核对生成用例数量，后续无需等待额外脚本才能继续开发。
+框架源码指纹872e3160df26a44f414b901a94db0f724fb2e27e81fefe7991997eccddfad449。
+DS新增22次调用、0.099275316美元，累计136次、0.367858116美元，原累计5元预算继续有效。
+离线回归82项，其中4项实时浏览器检查单独开启。浏览器语义变异检查通过，数据隔离检查复跑通过。
+首次浏览器回归的外层进程期限45/60秒不足，按多用例期限及报告开销改为90/180秒，保留原失败记录。
+
+完整产物补跑已有Lite外部12条为9过3失败0跳过，应用源码前后哈希一致。
+3条失败都在页面编辑器placeholder定位，Lite原文明确also exposed with those placeholders，
+完整任务改为Page title与Write your page content here...的role=textbox声明，未重复placeholder文字约束。
+属于跨输入版本诊断，保留原始成绩，未对生成应用追加人工修改。
+报告output/bookstack-full-policy-a3-external-subset.json。完整平台35条验收仍待重新送测。

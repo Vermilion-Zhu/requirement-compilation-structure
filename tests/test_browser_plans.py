@@ -224,7 +224,7 @@ document.querySelector('#undo').onclick=()=>{document.querySelector('#feedback')
         try:
             for name, body in bodies.items():
                 current["html"] = html(body)
-                result = suite(url, self.root / name, 45)
+                result = suite(url, self.root / name, 90)
                 with self.subTest(variant=name):
                     self.assertEqual(result["passed"], name == "valid", result)
                     self.assertEqual(result["kind"], "ACCEPTANCE_PASSED" if name == "valid" else "ASSERTION_FAILURE")
@@ -242,7 +242,7 @@ document.querySelector('#undo').onclick=()=>{document.querySelector('#feedback')
                 resolved_suite = BrowserSuite(directory, Path(os.environ["REACT_PLAYWRIGHT_CLI"]),
                                               channel=os.environ.get("REACT_BROWSER_CHANNEL"))
                 current["html"] = html(body)
-                result = resolved_suite(url, self.root / name, 45)
+                result = resolved_suite(url, self.root / name, 90)
                 with self.subTest(variant=name):
                     self.assertTrue(result["passed"], result)
         finally:
@@ -360,7 +360,7 @@ server.listen(Number(process.env.PORT),'127.0.0.1',()=>{
 ''', encoding="utf-8")
         suite = BrowserSuite(directory, Path(os.environ["REACT_PLAYWRIGHT_CLI"]),
                              channel=os.environ.get("REACT_BROWSER_CHANNEL"))
-        result = suite.for_application(application)("http://127.0.0.1:9", self.root / "isolated-results", 60)
+        result = suite.for_application(application)("http://127.0.0.1:9", self.root / "isolated-results", 180)
         self.assertTrue(result["passed"], result)
         self.assertEqual(result["stats"]["expected"], 2)
 

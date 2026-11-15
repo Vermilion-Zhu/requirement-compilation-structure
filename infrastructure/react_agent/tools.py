@@ -61,8 +61,10 @@ class Workspace:
                 content = content.replace(old, action["new"], 1)
             if not isinstance(content, str):
                 raise ValueError("content must be a string")
-            save_text(path, content)
-            self.revision += 1
+            changed = not path.is_file() or read_source(path) != normalize_newlines(content)
+            if changed:
+                save_text(path, content)
+                self.revision += 1
             return {"written": action["path"], "revision": self.revision}
         if tool == "run":
             argv = action.get("argv")
@@ -73,7 +75,8 @@ class Workspace:
                 if argv[0] == "npx":
                     command = [*command[:-1], str(Path(command[-1]).with_name("npx-cli.js"))]
                 argv = [*command, *argv[1:]]
-            seconds = min(max(float(action.get("timeout", 90)), 1), 120, timeout)
+            limit = 600 if action["argv"][:2] == ["npm", "install"] else 300
+            seconds = min(max(float(action.get("timeout", 90)), 1), limit, timeout)
             try:
                 result = capture_process(argv, cwd=self.output, timeout=seconds,
                                          env={"OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": ""})

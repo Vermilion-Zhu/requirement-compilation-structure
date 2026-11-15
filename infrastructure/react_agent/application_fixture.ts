@@ -43,7 +43,7 @@ export const test = base.extend<{ applicationURL: string }>({
     server.stderr?.on("data", record);
     server.on("error", error => { launchError = error; });
     try {
-      const deadline = Date.now() + 10000;
+      const deadline = Date.now() + 60000;
       let address: string | undefined;
       while (Date.now() < deadline && server.exitCode === null && !launchError) {
         const match = output.match(/Application listening at http:\/\/127\.0\.0\.1:(\d+)/);

@@ -1,6 +1,9 @@
 """Run with python -m infrastructure.react_agent.runner INPUT -o APPLICATION."""
 
 import argparse
+import itertools
+import math
+from openai import APIConnectionError
 import json
 from pathlib import Path
 import re
@@ -10,6 +13,7 @@ import sys
 from time import monotonic, sleep
 from urllib.request import ProxyHandler, build_opener
 from uuid import uuid4
+from hashlib import sha256
 
 from infrastructure.react_agent.prompt import INSTRUCTIONS
 from infrastructure.react_agent.provenance import fingerprint as framework_fingerprint
@@ -21,18 +25,53 @@ from infrastructure.utils.files import save_json
 from infrastructure.utils.processes import capture_process, npm_command, start_process, stop_process
 
 
+def request_with_retries(request, timeout, events):
+    started = monotonic()
+    for attempt in range(3):
+        remaining = timeout - (monotonic() - started)
+        try:
+            return request(remaining)
+        except Exception as error:
+            cause = error
+            transient = False
+            status = None
+            while cause is not None:
+                status = getattr(cause, "status_code", None)
+                transient = isinstance(cause, APIConnectionError) or status in {408, 409, 429} or (isinstance(status, int) and status >= 500)
+                if transient or cause.__cause__ is None:
+                    break
+                cause = cause.__cause__
+            if not transient or attempt == 2:
+                raise
+            delay = float(2 ** attempt)
+            retry_after = getattr(getattr(cause, "response", None), "headers", {}).get("retry-after")
+            if retry_after:
+                try:
+                    delay = max(delay, float(retry_after))
+                except ValueError:
+                    pass
+            if delay >= timeout - (monotonic() - started):
+                raise
+            events.append({"attempt": attempt + 1, "error_type": type(cause).__name__,
+                           "status_code": status, "backoff_seconds": delay})
+            sleep(delay)
+
+
 class ConversationModel(TextModel):
     """Use the existing endpoint compatibility with an append-only conversation."""
 
     def generate(self, messages: list[dict], timeout: float, *, instructions=INSTRUCTIONS) -> tuple[dict, dict]:
-        # Keep provider retries inside the run deadline. No stage-level retry loop.
-        self.client = self.client.with_options(timeout=min(timeout, 180), max_retries=0)
-        response = self._request_adapting(lambda: {
-            "model": self.name,
-            "messages": [{"role": "system", "content": instructions + "\n" + self.instruction_suffix()},
-                         *messages],
-            **reasoning_arguments(self.name, self.reasoning),
-        })
+        if not hasattr(self, "transport_events"):
+            self.transport_events = []
+        def request(remaining):
+            self.client = self.client.with_options(timeout=min(remaining, 300), max_retries=0)
+            return self._request_adapting(lambda: {
+                "model": self.name,
+                "messages": [{"role": "system", "content": instructions + "\n" + self.instruction_suffix()},
+                             *messages],
+                **reasoning_arguments(self.name, self.reasoning),
+            })
+        response = request_with_retries(request, timeout, self.transport_events)
         usage = response.usage.model_dump() if response.usage else {}
         if not response.choices or response.choices[0].finish_reason == "length":
             raise ValueError("Missing or truncated response; return a smaller complete action batch")
@@ -41,11 +80,14 @@ class ConversationModel(TextModel):
 
 def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
     """Check the actual build and a temporary server, cleaning up its entire tree."""
+    if not math.isfinite(timeout):
+        cases = getattr(acceptance, "manifest", None) or {}
+        timeout = 360 + sum(30 + 2 * case.get("step_count", 0) for case in cases.get("cases", []))
     started = monotonic()
     bind = getattr(acceptance, "for_application", None)
     if callable(bind):
         acceptance = bind(output)
-    build = capture_process([*npm_command(), "run", "build"], cwd=output, timeout=min(timeout, 120),
+    build = capture_process([*npm_command(), "run", "build"], cwd=output, timeout=min(timeout, 300),
                             env={"OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": ""})
     if build["returncode"]:
         return {"passed": False, "build": build["output"]}
@@ -62,7 +104,7 @@ def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
                                      "OPENAI_API_KEY": "", "VISUAL_API_KEY": "", "DEEPSEEK_API_KEY": ""},
                                 stdout=stream, stderr=stream)
         try:
-            deadline = monotonic() + min(remaining, 15)
+            deadline = monotonic() + min(remaining, 60)
             while monotonic() < deadline and process.poll() is None:
                 stream.flush()
                 content = log.read_text(encoding="utf-8", errors="replace")
@@ -84,15 +126,21 @@ def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
             stop_process(process)
 
 
-def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budget=900,
+def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_budget=None,
         install=True, checker=None, acceptance=None, resume=False) -> dict:
     """Build in one conversation. Every failure remains an observation or explicit status."""
-    if max_steps < 1 or time_budget <= 0:
+    if (max_steps is not None and max_steps < 1) or (time_budget is not None and time_budget <= 0):
         raise ValueError("max_steps and time_budget must be positive")
     requirements, output = requirements.resolve(), output.resolve()
     if output == requirements or output.is_relative_to(requirements) or requirements.is_relative_to(output):
         raise ValueError("Input and output directories must be separate")
     raw, contracts = compile_requirements(requirements)
+    requirements_count = len(contracts["implementation_ids"])
+    scenarios_count = sum(len(c.get("scenarios", [])) for c in contracts["contracts"] if isinstance(c.get("scenarios"), list))
+    initial_steps = max(1, 2 * requirements_count + scenarios_count)
+    step_limit = max_steps if max_steps is not None else initial_steps
+    progress_revision = 0
+    progress_passed = 0
     manifest = getattr(acceptance, "manifest", None)
     if isinstance(manifest, dict):
         fingerprint = "requirement_sha256" if manifest.get("requirement_sha256") else "source_sha256"
@@ -106,13 +154,14 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
         if session[fingerprint] != contracts[fingerprint]:
             raise ValueError("Requirement source changed; start a new conversation for the new input")
     started = monotonic()
-    deadline = started + time_budget
+    deadline = started + time_budget if time_budget is not None else math.inf
     initialize_project(output)
     arc = output / ".arc"
     arc.mkdir(exist_ok=True)
     save_json(arc / "requirements.json", raw)
     save_json(arc / "requirement-contracts.json", contracts)
     workspace = Workspace(output, requirements)
+    image_cache = {}
     playwright_module = None
     if acceptance is not None and getattr(acceptance, "cli", None):
         driver = acceptance.cli.parents[2] / "playwright/index.mjs"
@@ -130,7 +179,7 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
     messages = [{"role": "user", "content": json.dumps({
         "requirement_contracts": contracts, "application_root": str(output),
         "input_root": "input/", "platform": sys.platform,
-        "budget": {"max_steps": max_steps, "seconds": time_budget},
+        "budget": {"max_steps": max_steps, "initial_steps": initial_steps, "seconds": time_budget},
         "frozen_acceptance": {"available": acceptance is not None, "run_via": "verify"},
         "runtime_tools": {"node": shutil.which("node"), "npm": shutil.which("npm"),
             "playwright_module": playwright_module,
@@ -168,13 +217,20 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
         if install:
             before = monotonic()
             setup = workspace.execute({"tool": "run", "argv": ["npm", "install", "--include=dev", "--no-audit", "--no-fund"],
-                                       "timeout": 120}, timeout=deadline-monotonic())
+                                       "timeout": 600}, timeout=deadline-monotonic())
             report["setup_seconds"] = monotonic() - before
             record({"setup": setup})
             messages.append({"role": "user", "content": json.dumps({"dependency_install": setup})})
         model = model or ConversationModel()
         report["model"] = {key: getattr(model, key, None) for key in ("name", "reasoning")}
-        for step in range(1, max_steps + 1):
+        for step in itertools.count(1):
+            if step > step_limit:
+                passed = sum(item["status"] == "PASSED" for item in report["requirements"].values())
+                if max_steps is not None or (workspace.revision <= progress_revision and passed <= progress_passed):
+                    break
+                progress_revision, progress_passed = workspace.revision, passed
+                step_limit += initial_steps
+                record({"extended_steps": step_limit, "revision": progress_revision, "passed_requirements": passed})
             remaining = deadline - monotonic()
             if remaining <= 0:
                 break
@@ -202,7 +258,7 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
                     report["usage"][field] = report["usage"].get(field, 0) + value
             messages.append({"role": "user" if preflight else "assistant", "content": json.dumps(reply, ensure_ascii=False)})
             record({"step": step, "origin": "controller" if preflight else "model", "reply": reply, "usage": usage})
-            print(f"[REACT] {step}/{max_steps} | {monotonic()-started:.1f}s | {reply.get('progress', '')}", flush=True)
+            print(f"[REACT] {step}/{step_limit} | {monotonic()-started:.1f}s | {reply.get('progress', '')}", flush=True)
             actions = reply.get("actions")
             if actions == [] and acceptance is not None:
                 actions = [{"tool": "verify"}]
@@ -234,10 +290,18 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
                                           behavior_verified=verified, summary=action.get("summary", ""))
                     elif action.get("tool") == "image":
                         from infrastructure.shared.models.vision import VisualModel
-                        visual = VisualModel()
-                        visual.client = visual.client.with_options(timeout=min(remaining, 120), max_retries=0)
-                        report["image_calls"] += 1
-                        result = visual.analyze(workspace.path(action["path"]), max_attempts=1)
+                        image_path = workspace.path(action["path"])
+                        image_key = sha256(image_path.read_bytes()).hexdigest()
+                        if image_key in image_cache:
+                            result = image_cache[image_key]
+                        else:
+                            visual = VisualModel()
+                            def analyze(allowance):
+                                visual.client = visual.client.with_options(timeout=min(allowance, 120), max_retries=0)
+                                return visual.analyze(image_path, max_attempts=1)
+                            report["image_calls"] += 1
+                            result = request_with_retries(analyze, remaining, report.setdefault("transport_retries", []))
+                            image_cache[image_key] = result
                     else:
                         result = workspace.execute(action, timeout=remaining)
                 except (ValueError, OSError, KeyError, TypeError, RuntimeError, subprocess.TimeoutExpired) as error:
@@ -248,7 +312,7 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
                     break
             record({"step": step, "observations": observations})
             messages.append({"role": "user", "content": json.dumps({"observations": observations,
-                "remaining_steps": max_steps-step, "remaining_seconds": round(max(0, deadline-monotonic()))},
+                "remaining_steps": step_limit-step, "remaining_seconds": round(max(0, deadline-monotonic())) if math.isfinite(deadline) else None},
                 ensure_ascii=False)})
             save_json(arc / "react-report.json", report)
             save_session()
@@ -260,6 +324,9 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=40, time_budg
         report.update(status="INTERRUPTED" if isinstance(error, KeyboardInterrupt) else "FAILED", error=str(error))
         raise
     finally:
+        events = getattr(model, "transport_events", None)
+        if isinstance(events, list):
+            report["transport_retries"] = [*report.get("transport_retries", []), *events]
         report["elapsed_seconds"] = monotonic()-started
         report["total_elapsed_seconds"] = report["elapsed_seconds"] + sum(
             item.get("elapsed_seconds", 0) or 0 for item in report.get("previous_runs", []))
@@ -272,8 +339,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("requirements", type=Path)
     parser.add_argument("-o", "--output-dir", required=True, type=Path)
-    parser.add_argument("--max-steps", type=int, default=40)
-    parser.add_argument("--time-budget", type=float, default=900)
+    parser.add_argument("--max-steps", type=int, default=None)
+    parser.add_argument("--time-budget", type=float, default=None)
     parser.add_argument("--skip-install", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--acceptance-dir", type=Path)

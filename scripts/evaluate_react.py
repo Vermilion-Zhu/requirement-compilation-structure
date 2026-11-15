@@ -18,7 +18,7 @@ from infrastructure.utils.files import save_json
 
 
 def evaluate(requirements: Path, output: Path, external_tests: Path, playwright_cli: Path, *,
-             channel=None, time_budget=900, max_steps=40, evaluation_timeout=300, test_timeout=10000):
+             channel=None, time_budget=None, max_steps=None, evaluation_timeout=300, test_timeout=10000):
     requirements, output = requirements.resolve(), output.resolve()
     if output.exists():
         raise ValueError("Use a new output directory for fresh generation")
@@ -64,8 +64,8 @@ def main():
     parser.add_argument("--external-tests", required=True, type=Path)
     parser.add_argument("--playwright-cli", required=True, type=Path)
     parser.add_argument("--channel")
-    parser.add_argument("--time-budget", type=float, default=900)
-    parser.add_argument("--max-steps", type=int, default=40)
+    parser.add_argument("--time-budget", type=float, default=None)
+    parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--evaluation-timeout", type=float, default=300)
     parser.add_argument("--test-timeout-ms", type=int, default=10000)
     args = parser.parse_args()
