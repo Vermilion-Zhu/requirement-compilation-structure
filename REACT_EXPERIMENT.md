@@ -334,3 +334,31 @@ Deep Agents v0.7 and Anthropic's application harness were reopened on 2026-11-15
 ## Evaluation correction after platform run 7557958c3fd3
 
 The user requires framework-level fixes and fresh application generation for validation. Historical repairs of an existing BookStack application after exposing external tests are diagnostic evidence. Their 12/12 result has been removed from the README performance table. The new platform-generated application reported internal acceptance 12/12 while external evaluation passed 6/12. The source input fingerprint matches the earlier Lite input. The downloaded application and runtime logs are being replayed without source edits.
+
+
+## Fresh framework validation after the user's evaluation correction
+
+Run 7557958c3fd3 matches all 140 framework file hashes of release 0.1.0a1. Replaying
+its unchanged application with the saved external suite reproduced 6 passed and 6 failed.
+Three failures awaited Edit buttons and three awaited New Page buttons. The application
+rendered those workflow actions as links while its independent generated suite passed 12.
+
+Commit 1b576d5 introduced generic workflow-control role defaults, applied to both test
+and implementation contracts. Explicit source roles and permitted alternatives retain
+precedence. scripts/evaluate_react.py requires a fresh output and evaluates the external
+suite after generation. An internal pass with an external failure leaves the run failed.
+
+A new application was generated from the original BookStack Lite requirements using the
+complete pipeline, npm installation, and DeepSeek official deepseek-flash low reasoning.
+It took 574.016 seconds to generate, 504.781 seconds in the application phase, 16 loops,
+and 628.719 seconds including post-generation external evaluation. Both generated and
+fixed external suites passed 12/12, with zero skipped or flaky external cases. External
+tests were withheld from the model. Fourteen application source file hashes matched
+before and after external execution. The report is
+output/bookstack-platform-20261115/fresh-workflow-controls-v1.evaluation.json.
+
+This local result uses Chrome and Playwright 1.55 with the external 10-second case limit.
+The original platform preflight reported Playwright 1.57 and Chromium. A new platform
+submission remains pending. The generated plan also narrowed explicitly allowed page
+entry button/link alternatives to links, causing an extra repair. That test-fidelity
+and cost issue remains documented. Cumulative DS accounting is 114 calls, USD 0.2685828.

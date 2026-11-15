@@ -209,3 +209,33 @@ output/releases/react-0.1.0a1-validation.json。平台 Linux/Chromium 实测待�
 用户明确要求修复 Agent 框架，并要求以从零生成的应用验证效果。此前把暴露外部测试后的旧应用恢复修复结果放入框架成效表，口径不当，已撤下该行。相关过程保留为诊断记录。
 
 本次平台 run 为 7557958c3fd3，BookStack Lite，输入语义指纹与先前输入一致。平台运行约 5 分 42 秒，应用内验收报告 12/12，用户提供的外部结果 6/12。生成包位于 D:/download/se/7557958c3fd3-template.zip，解压及复现记录位于当前 output/bookstack-platform-20261115。源码显示 Edit 和 New Page 使用链接，外部用例要求 button，正进行原包本地复现。生成应用源码仅用于只读诊断，后续修复落实到框架，从原始需求重新生成验证。
+
+
+## 0.1.0a2 从零生成与固定外部验收
+
+本次用户强调只修复框架，撤下把外部测试暴露后的旧应用修复成绩当作框架能力的做法。
+平台生成包 7557958c3fd3 的 140 个框架文件与 0.1.0a1 发布包逐项一致。
+原包本地外部测试精确复现 6 通过/6 失败，三个 Edit 和三个 New Page 均为 link/button 差异。
+生成应用源码在诊断前后的哈希一致。
+
+框架提交 1b576d530616ddc96bf9fd6791a6d91606d55792 增加 workflow_controls 默认语义，
+未指定角色的创建和编辑等工作流动作采用原生按钮，显式角色和允许替代形式优先。
+测试编译显式使用同一 website_defaults。BrowserSuite 支持指定每例期限，外部本次为10秒。
+新增 scripts/evaluate_react.py，要求新输出目录，生成结束后执行固定外部测试，
+自测通过而外部失败时整轮失败。56 项框架和入口回归通过。
+
+新一轮从原始 BookStack Lite 需求和空脚手架生成，完整框架自动完成16个实现循环。
+模型为 DeepSeek 官方 deepseek-flash，test/implementation reasoning 均为 low。
+生成约574.016秒，应用阶段504.781秒，含外部验收总计628.719秒。
+自生成冻结测试12/12，生成结束后固定外部12/12，0跳过、0失败、0flaky。
+外部测试未传给生成模型；原包和本轮产物保留。
+
+本轮新应用源码14个文件在外部检查前后哈希一致。完整报告为
+output/bookstack-platform-20261115/fresh-workflow-controls-v1.evaluation.json。
+该应用的框架源码指纹为46079623ea41b6a79e851a3b6ae07cf7495899477c9186c5d33f5cde6e5f5166。
+本轮新增DS估算0.027854712美元，累计114次、0.2685828美元，原5元累计预算继续有效。
+
+本轮自测仍把原文允许button/link的页面条目收窄为link，导致生成器额外改写一次合法实现。
+这一点作为测试语义和成本问题保留，后续优化需从框架处理。0.1.0a2平台回送待验证。
+候选ZIP按用户规则命名 Workflow Controls and Evaluation 20261115 dzs.zip，
+版本、提交和指纹核对结果保存于 output/releases/workflow-controls-0.1.0a2-validation.json。
