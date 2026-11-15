@@ -26,6 +26,18 @@ output/stackoverflow-v1-auto.log，产物在 output/react-experiment/stackoverfl
 本轮还出现全页同名认证按钮的定位冲突，应审核测试范围与合法替代实现。
 当前累计账本为 77 次调用、估算 0.145040022 美元。下一次付费实验前先修正测试数据。
 
+邮箱修复检查点 ef9bc33 已完成。unique 值支持 ${unique} 位置模板，旧邮箱计划自动将
+标识移入地址内部，固定 seed、普通标题及负例保持各自的数据规则。浏览器原生 email
+校验回归先失败两例，修复后有效邮箱与负例三例通过。完整浏览器后端 15 项通过，
+框架及入口 50 项通过。本阶段没有模型调用。
+
+output/react-experiment/stackoverflow-email-v2-control 使用原计划的新版编译产物检查
+已有应用，结果为前 12 例通过、1 例失败、14 例未执行。属于后端校准，应用从零生成
+试验继续保留 TIME_LIMIT。失败来自框架隐式断言，REQ-3.3 明确规定
+“Title character count”(role=status) 显示标题长度，plan_runtime.ts 的 visible 分支却
+自动要求 status 包含 declaration.label 本身。必须区分命名与动态内容，保留原冻结
+版本并开启新测试版本修正语义。下一阶段优先处理此问题，避免模型继续修改正确 UI。
+
 2026-11-15。用户因关机明确要求暂停，线程目标已标记为 paused。
 本地模型测试进程已经结束。下一阶段开始前先阅读本说明和 REACT_EXPERIMENT.md。
 
