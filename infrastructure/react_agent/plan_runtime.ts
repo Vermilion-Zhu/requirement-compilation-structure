@@ -72,9 +72,6 @@ export async function execute(page: Page, plan: CasePlan, declarations: Record<s
         if (step.check === "visible" && expectedName !== undefined) {
           await expect(locator).toHaveAccessibleName(declaredName(expectedName, variables));
         }
-        if (step.check === "visible" && declaration && ["status", "alert"].includes(declaration.role)) {
-          await expect(locator).toContainText(declaredName(declaration.label, variables));
-        }
         switch (step.check) {
           case "visible": await expect(locator).toBeVisible(); break;
           case "hidden": await expect(locator).toBeHidden(); break;

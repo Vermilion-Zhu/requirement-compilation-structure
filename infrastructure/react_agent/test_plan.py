@@ -46,6 +46,9 @@ Actions are click, hover, fill (value), press (value), select_option (value), ch
 Assertions use op=expect, check=visible|hidden|count|text|contains_text|not_contains_text|value|attribute|accessible_name.
 Text/value/name assertions use value. Count uses a nonnegative integer value.
 Attribute assertions additionally use key, such as aria-pressed, with a string value.
+visible checks visibility. Assert required visible messages separately using text or
+contains_text. A region's accessible name identifies it; numeric status counters and
+other dynamic content need assertions derived from their original expected values.
 
 Produce structured plans only. JavaScript, mock state and implementation-specific routes
 are outside this test language. Use semantic UI actions and original evidence. Named
@@ -95,6 +98,8 @@ def validate_plan(raw: dict, contracts: dict, plan: dict) -> list[dict]:
     def target(value, variables, used):
         if not isinstance(value, dict):
             raise ValueError("A UI action needs a target")
+        if set(value) - {"role", "name", "text", "declaration", "within"}:
+            raise ValueError("Unknown target options; use exact semantic selectors and within")
         selectors = sum(key in value for key in ("role", "text", "declaration"))
         if selectors != 1:
             raise ValueError("A target needs exactly one role, text or declaration selector")
@@ -151,6 +156,14 @@ def validate_plan(raw: dict, contracts: dict, plan: dict) -> list[dict]:
         for step in steps:
             if not isinstance(step, dict) or step.get("op") not in ACTIONS:
                 raise ValueError("Unknown browser-test operation")
+            if "within" in step:
+                scope = step.pop("within")
+                selector = step.get("target")
+                if not isinstance(selector, dict) or selector.get("within", scope) != scope:
+                    raise ValueError("Conflicting or missing target for step scope")
+                selector["within"] = scope
+            if set(step) - {"op", "target", "url", "value", "key", "check"}:
+                raise ValueError("Unknown browser-step options")
             if step["op"] == "goto":
                 url = step.get("url")
                 if not isinstance(url, str) or not url.startswith("/") or url.startswith("//") or "\\" in url:

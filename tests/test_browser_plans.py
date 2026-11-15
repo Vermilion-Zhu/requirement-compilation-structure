@@ -33,6 +33,7 @@ description: 'Click Save to show "Saved"(role=status) with "Undo"(role=button). 
                 {"op": "click", "target": {"role": "button", "name": "Save"}},
                 {"op": "expect", "target": {"declaration": "UI-1"}, "check": "visible"},
                 {"op": "expect", "target": {"declaration": "UI-2"}, "check": "visible"},
+                {"op": "expect", "target": {"declaration": "UI-1"}, "check": "contains_text", "value": "Saved"},
                 {"op": "click", "target": {"declaration": "UI-2"}},
                 {"op": "expect", "target": {"text": "Undone"}, "check": "visible"},
             ]}]}
@@ -80,6 +81,28 @@ description: 'Click Save to show "Saved"(role=status) with "Undo"(role=button). 
         plan = self.plan()
         plan["cases"][0]["steps"][2]["target"]["within"] = {"role": "main"}
         validate_plan(self.raw, self.contracts, plan)
+
+    def test_legacy_step_scope_is_preserved_as_target_scope(self):
+        plan = self.plan()
+        plan["cases"][0]["steps"][1]["within"] = {"role": "main"}
+        cases = validate_plan(self.raw, self.contracts, plan)
+        self.assertEqual(cases[0]["steps"][1]["target"]["within"], {"role": "main"})
+        self.assertNotIn("within", cases[0]["steps"][1])
+        self.assertIn("within", plan["cases"][0]["steps"][1])
+
+    def test_ignored_browser_options_and_conflicting_scopes_are_rejected(self):
+        for variant in ("step", "target", "conflict"):
+            plan = self.plan()
+            step = plan["cases"][0]["steps"][1]
+            if variant == "step":
+                step["timeout"] = 100
+            elif variant == "target":
+                step["target"]["exact"] = False
+            else:
+                step["within"] = {"role": "main"}
+                step["target"]["within"] = {"role": "dialog"}
+            with self.subTest(variant=variant), self.assertRaises(ValueError):
+                validate_plan(self.raw, self.contracts, plan)
 
     def test_missing_variables_invalid_assertions_and_bad_sources_are_rejected(self):
         for variant in ("variable", "assertion", "source", "count"):
@@ -222,6 +245,42 @@ document.querySelector('#undo').onclick=()=>{document.querySelector('#feedback')
                 result = resolved_suite(url, self.root / name, 45)
                 with self.subTest(variant=name):
                     self.assertTrue(result["passed"], result)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    @unittest.skipUnless(os.environ.get("REACT_BROWSER_TESTS") == "1", "Enable REACT_BROWSER_TESTS for live browser checks")
+    def test_named_counter_can_display_numeric_content(self):
+        (self.input / "requirements.yaml").write_text('''id: R
+description: '"Title character count"(role=status) shows the length of the entered title.'
+''', encoding="utf-8")
+        plan = {"cases": [{"requirement_id": "R", "title": "Counter", "source": "requirements.yaml#/description",
+            "steps": [{"op": "goto", "url": "/"},
+                      {"op": "expect", "target": {"declaration": "UI-1"}, "check": "visible"},
+                      {"op": "expect", "target": {"declaration": "UI-1"}, "check": "text", "value": "3"}]}]}
+        directory = self.root / "counter-suite"
+        compile_plan(self.input, directory, plan)
+        current = {"value": "3"}
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(('<div role="status" aria-label="Title character count">' + current["value"] + '</div>').encode())
+            def log_message(self, *_):
+                pass
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            suite = BrowserSuite(directory, Path(os.environ["REACT_PLAYWRIGHT_CLI"]),
+                                 channel=os.environ.get("REACT_BROWSER_CHANNEL"))
+            result = suite(f"http://127.0.0.1:{server.server_port}", self.root / "counter-results", 30)
+            self.assertTrue(result["passed"], result)
+            current["value"] = "4"
+            result = suite(f"http://127.0.0.1:{server.server_port}", self.root / "wrong-counter-results", 30)
+            self.assertFalse(result["passed"], result)
+            self.assertEqual(result["kind"], "ASSERTION_FAILURE")
         finally:
             server.shutdown()
             server.server_close()
