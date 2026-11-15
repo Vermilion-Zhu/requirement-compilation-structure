@@ -81,6 +81,40 @@ class ReactAgentTests(unittest.TestCase):
         module.write_text("prompt = 'second'", encoding="utf-8")
         self.assertNotEqual(initial["source_sha256"], fingerprint("first", root=root)["source_sha256"])
 
+    def test_executable_test_batch_keeps_complete_original_context(self):
+        (self.input / "requirements.yaml").write_text('id: ROOT\nchildren:\n- id: A\n  description: First workflow\n- id: B\n  description: Prerequisite workflow\n')
+        model = Mock()
+        model.generate.return_value = ({"files": {"A.spec.ts": "// test source"}, "cases": [
+            {"requirement_id": "A", "source": "requirements.yaml#/children/0", "file": "A.spec.ts", "title": "A"}]}, {})
+        report = generate_tests(self.input, self.root / "executable-suite", model=model, implementation_ids=["A"])
+        payload = json.loads(model.generate.call_args.args[0][0]["content"])["requirement_contracts"]
+        self.assertEqual(payload["implementation_ids"], ["A"])
+        self.assertEqual({r["id"] for r in payload["contracts"]}, {"ROOT", "A", "B"})
+        self.assertEqual(report["uncovered_requirements"], [])
+
+    def test_invalid_executable_test_selection_stops_before_model_or_output(self):
+        (self.input / "requirements.yaml").write_text("id: A\ndescription: Workflow\n", encoding="utf-8")
+        model = Mock()
+        destination = self.root / "executable-suite"
+        for selected in ([], ["missing"], ["A", "A"]):
+            with self.subTest(selected=selected), self.assertRaisesRegex(ValueError, "distinct known"):
+                generate_tests(self.input, destination, model=model, implementation_ids=selected)
+        model.generate.assert_not_called()
+        self.assertFalse(destination.exists())
+
+    def test_executable_test_batch_rejects_cases_outside_requested_scope(self):
+        (self.input / "requirements.yaml").write_text(
+            "id: ROOT\nchildren:\n- id: A\n  description: Requested workflow\n"
+            "- id: B\n  description: Prerequisite workflow\n", encoding="utf-8")
+        model = Mock()
+        model.generate.return_value = ({"files": {"B.spec.ts": "// test source"}, "cases": [
+            {"requirement_id": "B", "source": "requirements.yaml#/children/1",
+             "file": "B.spec.ts", "title": "B"}]}, {})
+        destination = self.root / "executable-suite"
+        with self.assertRaisesRegex(ValueError, "known requirement"):
+            generate_tests(self.input, destination, model=model, implementation_ids=["A"])
+        self.assertFalse(destination.exists())
+
     def test_failed_finish_returns_observation_and_can_repair(self):
         checker = Mock(side_effect=[{"passed": False, "error": "build failed"}, {"passed": True}])
         model, report = self.run_agent([

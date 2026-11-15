@@ -251,3 +251,24 @@ The root entry reads the release manifest to select its default engine. The sour
 checkout defaults to the staged engine. A release built with `--engine react` runs
 the experimental pipeline through the platform's fixed command without extra flags.
 Platform-injected model configuration remains authoritative.
+
+## 2026-11-15 test-language feasibility checkpoint
+
+The StackOverflow typed plan's source-only review found missing reputation deltas,
+unsupported absent-versus-disabled constraints and incorrect setup actors. The current
+language has no captured baselines or relative arithmetic. We reused acceptance.py for
+ordinary Playwright probes before deciding whether to reduce the typed layer.
+
+Two selected voting requirements generated and collected in 18.531 seconds with reasoning
+explicitly disabled. Review found stale reads and DOM-order-dependent entity selection.
+A revised candidate took 19.468 seconds. A browser calibration with legally equivalent
+aria-label and aria-labelledby naming passed one layout and failed the other. The final
+candidate expanded beyond requested requirement IDs and was rejected before files were
+written. These candidates have not driven application repair. Differences in scope,
+reasoning, feedback and isolation prevent a controlled speed comparison.
+
+The production change in this checkpoint is optional selection on the existing executable
+test compiler, preserving complete source context. Empty, duplicate and unknown selections
+are rejected before model dispatch, and out-of-scope cases remain rejected before writing.
+The default submission pipeline still uses typed plans. Latest details, evidence paths and
+cumulative budget are in REACT_HANDOFF.md.

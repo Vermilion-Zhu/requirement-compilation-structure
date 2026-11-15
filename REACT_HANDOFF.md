@@ -1,197 +1,155 @@
 # 轻量网站 Agent 阶段交接
 
-## 2026-11-15 恢复后的进展
+更新于 2026-11-15。用户已恢复实验，当前目标 active。
 
-用户已恢复实验。分批编译改为保留完整契约与 UI 上下文，仅收窄本批 implementation_ids。
-恢复会话的首轮由控制器执行验收并返回当前失败，有冻结测试时空 actions 也触发实际验收。
-新增回归先复现问题，修改后 50 项框架及入口测试通过，见 output/resume-red.log 和 resume-green.log。
+## 开发位置和交付目标
 
-本地 Chrome 最小复现显示，预填 textarea 嵌在隐式 label 中时 exact getByLabel
-匹配数为 0，role/name 查询为 1；显式 htmlFor/id 后均为 1。这是定位兼容差异，
-不能据此断言原隐式标签不符合可访问性要求。
+最终交付是 ArcBench Agent 源码 ZIP。平台输入任意网站需求，框架自动生成应用和测试。
+用户强调少修改、正确完成、跨任务适用，以及分钟级反馈。测试期望须来自源需求。
 
-实际恢复 BookStack 后，Agent 接收真实验收失败并修改表单标签关联，外部测试通过 12/12。
-本轮耗时 153.4 秒，4 个循环中首轮为控制器，模型调用 3 次。原从零生成的外部成绩保持
-10/12，本轮属于使用已暴露外部测试的修复验证。日志在 output/bookstack-resume-v2.log。
-累计账本 45 次调用、估算 0.073039584 美元，继续沿用原累计预算。
+- 当前开发目录为 E:/D-download/se/team-requirement-compiler-react，分支 experiment/react-lite。
+- 旧框架目录为 E:/D-download/se/team-requirement-compiler，分支 chore/agent-cleanup，39eae6b。
+- 两个 worktree 共享 Git 对象和远程配置，源码工作区独立。
+- upstream 为 https://github.com/Vermilion-Zhu/requirement-compilation-structure.git。
+- origin 仍保存旧 fork，推送显式使用 upstream。
+- 新实验用当前目录的 output。早期实验和预算脚本保留在旧目录的 output/react-experiment。
+- Python 为 E:/D-download/se/lab6/leader-framework/.venv/Scripts/python.exe。
+- 设置 PYTHONPATH 为当前开发目录。TEMP/TMP 使用 output/merge-check/tmp。
+- 已有 Playwright CLI 为 E:/D-download/se/lab5/validation/bookstack-home-output/node_modules/@playwright/test/cli.js。
+- 本地浏览器使用 channel=chrome。Linux、平台 Chromium 和云端运行仍待验证。
 
-后续仍需验证其他 Lite 项目、多批自动测试的实际质量和最新送测包。
+源码入口默认 staged。scripts/package.py --engine react 生成的包通过 agent-release.json
+选择轻量引擎。最近保留的候选包仍为旧目录 output/releases/compiler-react-671be45-20261115.zip，
+已经落后于源码，后续送测前需要重新打包和验证。
 
-恢复阶段继续运行 StackOverflow Lite，3 批成功编译 27 个用例，实际应用生成最终触及
-900 秒总时限。结果为 TIME_LIMIT，不能作为完整验收成功。日志在
-output/stackoverflow-v1-auto.log，产物在 output/react-experiment/stackoverflow-v1-auto。
-发现优先级更高的数据生成缺陷：plan_runtime.ts 为 unique 变量统一追加空格和 UUID，
-使邮箱变成无效邮箱；Agent 随后放宽应用邮件校验来适应生成数据。应先为邮箱等有格式
-约束的数据设计保形唯一值与回归测试，保留旧测试及应用作为失败证据，开启新版本。
-本轮还出现全页同名认证按钮的定位冲突，应审核测试范围与合法替代实现。
-当前累计账本为 77 次调用、估算 0.145040022 美元。下一次付费实验前先修正测试数据。
+## 框架当前状态
 
-邮箱修复检查点 ef9bc33 已完成。unique 值支持 ${unique} 位置模板，旧邮箱计划自动将
-标识移入地址内部，固定 seed、普通标题及负例保持各自的数据规则。浏览器原生 email
-校验回归先失败两例，修复后有效邮箱与负例三例通过。完整浏览器后端 15 项通过，
-框架及入口 50 项通过。本阶段没有模型调用。
+requirements.py 保留完整源文档、未知字段、引用与指纹，角色声明只做部分词法索引。
+runner.py 使用单个追加式 ReAct 会话，执行文件、进程、图像和 verify 工具。
+submission.py 当前默认生成分批 typed plan，再编译固定 Playwright 后端、冻结、收集和执行。
+分批仅收窄 implementation_ids，保留完整原始契约和 UI 上下文，以提供跨需求前置流程。
+恢复会话先由控制器验收，有冻结测试时空 actions 也触发实际验证。
 
-output/react-experiment/stackoverflow-email-v2-control 使用原计划的新版编译产物检查
-已有应用，结果为前 12 例通过、1 例失败、14 例未执行。属于后端校准，应用从零生成
-试验继续保留 TIME_LIMIT。失败来自框架隐式断言，REQ-3.3 明确规定
-“Title character count”(role=status) 显示标题长度，plan_runtime.ts 的 visible 分支却
-自动要求 status 包含 declaration.label 本身。必须区分命名与动态内容，保留原冻结
-版本并开启新测试版本修正语义。下一阶段优先处理此问题，避免模型继续修改正确 UI。
+现有 acceptance.py 可以直接生成普通 Playwright TypeScript。本轮增加可选 implementation_ids，
+沿用完整上下文，并在调用模型前拒绝空、重复和未知 ID。输出 case 越界会在写入前被拒绝。
+增加通用提示，明确本批输出范围，以及动态 status 内容应依据原文。
+这条普通 Playwright 路径仍处于实验阶段，尚未替换送测默认流程。
 
-2026-11-15。用户因关机明确要求暂停，线程目标已标记为 paused。
-本地模型测试进程已经结束。下一阶段开始前先阅读本说明和 REACT_EXPERIMENT.md。
+固定 typed 后端每例启动独立应用和数据库。普通 Playwright 实验共享一轮新服务，
+浏览器身份使用独立 context，数据通过唯一值和 UI 前置流程隔离。比较时须记录此差异。
+测试文件和清单有指纹校验。引用存在和用例收集通过，仍需继续检查逐条语义覆盖。
 
-## 目标和约束
+尚未集成按需测试切片、实现文件冻结、上下文压缩和七区域平台追溯。
+工具路径检查无法代替操作系统沙箱。
 
-最终交付物是上传 ArcBench 的 Agent 源码 ZIP。平台给定新的网站需求后，
-Agent 自动编译测试、生成应用、执行验收和修复。重点包括需求语义保留、
-独立测试、低延迟、低模型消耗。用户强调少修改、正确完成和跨任务适用。
+## Git 检查点
 
-人工编写的校准应用和测试计划用于验证框架后端。送测入口从公开需求生成测试。
-源需求优先，默认解释只填补未明确的属性。对外报告须区分应用生成、测试编译、
-人工校准、记录重放、外部测试，以及 Lite 与完整任务。
+- 513b5fa，首个轻量 ReAct 原型。
+- 671be45，自动 typed tests、隔离、运行指纹和送测入口。
+- 1985aac，分批测试和显式表单标签约定。
+- 2a7a00c，完整分批上下文和恢复前验收。
+- 9119d9f，保留 StackOverflow 首轮失败证据。
+- ef9bc33，唯一邮箱保形，支持 ${unique} 位置模板。
+- bce96bd，记录邮箱和动态状态断言缺陷。
+- e4dc952，删除 visible 对 status 文字的隐式等值要求，保留显式内容断言，兼容旧 step-level within 并拒绝冲突/未知选项。
 
-## 工作目录与 Git
+继续时用 git log 和 git status 核对本说明之后的提交。
 
-两个 worktree 已在暂停前拆开。
+## 输入和已验证结果
 
-| 目录 | 分支 | 框架状态 |
-| --- | --- | --- |
-| E:/D-download/se/team-requirement-compiler | chore/agent-cleanup | 旧框架，39eae6b |
-| E:/D-download/se/team-requirement-compiler-react | experiment/react-lite | 轻量实验框架 |
+源包为 D:/download/se/arcbench-arc-bench-lite-requirements.zip，E: 有同名副本。
+75 个文件已展开至 E:/D-download/se/arcbench-requirements-lite，指纹在 .source-archive.json。
+Keep 为 6 项需求/11 场景，BookStack Lite 为 8/12，StackOverflow 为 17/27，
+PrestaShop 为 19/32，12306 为 31/49，Ctrip 为 32/50。后三项尚未真实模型生成。
 
-两个目录共享 Git 对象和远程配置，各自维护源码工作区。后续开发使用第二个目录。
-早期实验产物继续保存在旧目录的 output/react-experiment 下，完整绝对路径仍有效。
-
-开发分支跟踪 upstream/experiment/react-lite。upstream 指向组长仓库
-https://github.com/Vermilion-Zhu/requirement-compilation-structure.git 。
-origin 仍保存旧 fork 地址，推送时显式使用 upstream。
-
-主要检查点如下。
-
-- 513b5fa，首个推送的 ReAct 原型，包括来源关联和独立验收。
-- 671be45，已推送。自动测试计划、固定浏览器后端、每例隔离、运行指纹、送测入口和打包清单。
-- 1985aac，暂停前新增。测试编译按场景规模分批，补充显式表单标签关联和首次浏览器检查使用 verify 的提示。
-- 本交接说明通过后续文档提交保存，恢复时用 git log 核对最终 HEAD 和远程同步状态。
-
-## 新的 Lite 输入包
-
-用户指定 D:/download/se/arcbench-arc-bench-lite-requirements.zip。
-同名文件在 E:/D-download/se 也存在。已将 75 个需求和图片文件展开至
-E:/D-download/se/arcbench-requirements-lite，并写入 .source-archive.json 记录源包及文件指纹。
-
-| 子任务 | 实现需求数 | 原始场景数 | 本地进度 |
+| 实验 | 耗时和状态 | 自动测试 | 外部测试 |
 | --- | --- | --- | --- |
-| arc-bench-lite--keep | 6 | 11 | 与已测原输入的语义指纹相同 |
-| arc-bench-lite--bookstack | 8 | 12 | 与已测原输入的语义指纹相同 |
-| arc-bench-lite--stackoverflow | 17 | 27 | 尚未运行模型生成 |
-| arc-bench-lite--prestashop | 19 | 32 | 尚未运行模型生成 |
-| arc-bench-lite--12306 | 31 | 49 | 尚未运行模型生成 |
-| arc-bench-lite--ctrip | 32 | 50 | 尚未运行模型生成 |
+| Keep v6-auto | 225.7 秒，应用阶段 148.5 秒 | 11/11 | 11/11 |
+| BookStack Lite v3-auto 首轮 | 369.6 秒，应用阶段 330.1 秒 | 12/12 | 10/12 |
+| BookStack Lite 恢复修复 | 153.4 秒，3 次模型请求 | 12/12 | 12/12 |
+| StackOverflow 首轮 | 总时限 900 秒，TIME_LIMIT | 27 例编译完成，应用未完成验收 | 尚无外部套件 |
+| StackOverflow status-v3 修复后检查 | 修复运行 TIME_LIMIT，检查独立执行 | 20 通过、1 失败、6 未执行 | 尚无外部套件 |
 
-## 已有结果
+BookStack 恢复修复已暴露外部测试，不能视为首次未见测试成绩。预填 textarea 的隐式
+label 在本地 Chrome 下存在 exact getByLabel 兼容差异，显式 htmlFor/id 修复后通过。
+外部套件保存在 arcbench-local-replay/imports。Keep 套件独立来源尚未进一步核实。
+BookStack Lite 的 12 场景与完整任务 35 场景分别记录。
 
-旧实验根目录为 E:/D-download/se/team-requirement-compiler/output/react-experiment。
+StackOverflow 原测试唯一值追加破坏邮箱格式，模型随后放宽应用校验，失败样本已保留。
+后端还把 Title character count 的 accessible name 当成可见正文，错误拒绝数值状态。
+修复后 status-v3 校准计划手动补了一条长度断言，属于人工校准，旧冻结版本继续保留。
+修复运行 9 个循环约 361.6 秒，TIME_LIMIT。之后真实检查为 20/1/6，失败源于测试
+把父问题和答案的 Score 混为全页唯一字段，应先修测试。应用源码由模型修订。
+旧计划中依赖隐式 status 文字断言的覆盖情况仍需复核。
 
-| 实验 | 总耗时 | 自动测试 | 另存外部测试 |
-| --- | --- | --- | --- |
-| keep-v6-auto | 225.7 秒，包含测试编译和收集 | 11/11 | 11/11 |
-| bookstack-v3-auto 首轮 | 369.6 秒，包含工具准备和测试编译 | 12/12 | 10/12 |
+## 普通 Playwright 可行性实验
 
-Keep 应用阶段 148.5 秒、8 轮、3 次图片分析。BookStack 应用阶段
-330.1 秒、18 轮、4 次图片分析。BookStack 的多轮时间花在自编 smoke 脚本定位上。
-当前提示要求优先调用控制器 verify，再根据失败做局部诊断，效果仍需新一轮验证。
+独立需求复核记录在当前 output/react-experiment/stackoverflow-plan-independent-review。
+复核只接收源需求和测试，无应用源码/运行结果。27 条发现的原文引用已逐字核对，
+各条判断仍需审阅。已确认缺口包括声望增减、合法的隐藏或禁用替代、身份和 UI 前置流程。
+Typed DSL 缺少基线捕获、相对计算和合法替代分支，继续添加操作码会扩大维护范围。
+因此复用已有 acceptance.py 试验直接生成普通 Playwright。
 
-BookStack 的外部失败均在 REQ-2.4 编辑已有 metadata。
-自编 smoke 曾在 getByLabel('Description', exact=true) 超时，Agent 将自己的
-smoke 改为 getByRole 查询后通过。自动生成的独立测试同样使用 role 查询，
-因而首轮自动验收通过，外部 label 查询仍失败。
-页面在编辑时 textarea 已有值，嵌套隐式 label 的文本匹配是待最小复现的怀疑点。
+- 全任务直接生成 v1 在 24,000 输出 token 截断，推理占 20,882，未得到可用套件。
+- focused-v2 只选 REQ-3.6 和 REQ-4.2，reasoning=none，18.531 秒，2 例成功收集。
+- v2 独立源文/代码复核确认声望读取缺少等待，以及父问题分数依赖 DOM 顺序。
+- focused-v3 在约 19.468 秒生成并收集 2 例，修正了声望轮询，但通过原始 aria-label
+  识别答案。最小浏览器校准中 aria-label 命名通过，aria-labelledby 命名失败。
+- focused-v4 超范围生成其他需求，被 case 校验拒绝，未写入可执行套件。
+  原始结果位于旧实验根 focused-v4-rejected-proposal.json，调用原始响应也已保存。
+- 本批两次修订已结束。没有把这些候选测试交给应用 Agent 修复，也没有新的应用通过率。
+- 小范围、reasoning=none 和额外反馈同时变化，18 秒结果尚无法用于格式速度的因果比较。
 
-1985aac 增加了通用 htmlFor/id 表单关联约定，随后尝试沿原会话修复。
-这次修复以 STEP_LIMIT 结束，6 轮均返回空 actions，进度文字声称已经通过。
-控制器报告保留了 STEP_LIMIT，实际没有进行本轮应用修改和重新验收。
-BookStack 外部成绩继续按 10/12 记录。
+v3 脚本首次读错前一版目录，在模型调用前退出，已纠正。校准首次缺 PYTHONPATH，
+补齐后实际执行。框架测试首次用了不适用的模块导入命令，已改 discover 完整重跑。
 
-首轮报告和会话保存在 bookstack-v3-auto/.arc/ 下的
-react-report-before-label-repair.json、react-session-before-label-repair.json。
-最新覆盖报告保留失败的修复尝试。修复日志位于新 worktree 的
-output/bookstack-label-repair.log。
+关键实验文件位于当前 worktree 的 output。
 
-Keep 自动测试在准备好的正例应用上通过 11/11，也拒绝了旧 v1 应用。
-v1 的首次失败发生在创建后的标题卡片定位，尚不能据此声称这次校准单独证明了 status 缺陷检测。
+- stackoverflow-v3-postrepair-check.json，20/1/6 检查。
+- stackoverflow-playwright-focused-v2-summary.json 和 focused-v3-summary.json。
+- react-experiment/stackoverflow-playwright-focused-v2-review/review.json。
+- score-scope-calibration-summary.json，两种命名的实际浏览器校准，1 通过/1 失败。
+- stackoverflow-playwright-focused-v4-generation.log，越界拒绝日志。
+- react-resume-framework-tests.log、react-resume-plan-tests.log 和 react-resume-plan-live-tests.log。
 
-## 下一阶段优先处理
+## 模型授权和累计预算
 
-1. 修正分批上下文。目前 partition_contracts 只保留当前需求及祖先，可能丢掉跨需求的
-   前置创建流程和引用。优先考虑每批保留完整原始契约，仅收窄 implementation_ids，
-   这样可以减少依赖裁剪逻辑并复用公共输入前缀。为跨批前置条件增加回归测试。
-2. 修正恢复会话的验收接线。已有完成历史让模型连续声称完成并返回空 actions。
-   恢复到新的验收集合时，控制器应先实际验证当前应用并返回具体失败。
-   增加空 actions 连续出现的回归测试，保留真实完成状态与费用边界。
-3. 最小复现预填 textarea 的 label 查询问题。通过 Agent 的通用表单实现约定修复，
-   再跑 BookStack 的自动测试和外部 12 例。保留现有冻结测试。
-4. 用用户的新 Lite 包，从较小的 StackOverflow 或 PrestaShop 开始验证多批测试编译，
-   然后根据剩余时间和费用测试 Ctrip、12306。每轮保留输入、提交、提示词及测试指纹。
-5. 重新打包当前提交并验证固定入口。671be45 的候选包尚未包含 1985aac 的后续改动。
+用户授权通过现有 DEEPSEEK_API_KEY 向官方接口发送需求、提示、参考图及应用源码，
+本阶段累计费用不超过人民币 5 元。所有实验复用旧目录 output/react-experiment 下的
+api_budget.py 和 deepseek-budget-5cny.json。禁止重置账本或并发运行付费进程。
 
-目前代码只校验需求 ID 覆盖、引用存在、计划格式、实际用例收集及测试完整性。
-原始场景的逐条语义覆盖、合法替代实现、独立断言复核仍需加强。
-按需执行测试切片、实现范围冻结、七区域平台追溯和上下文压缩也尚未集成。
+截至本轮 91 次调用，账本估算 0.226200828 美元。预算守卫累计上限 0.60 美元，
+请求前按高峰未缓存价格和最多 24,000 输出 token 预留，成功后按 usage 更新。
+失败保留预留。辅助预算文件位于 ignored output。后续模型原始响应保存于 deepseek-responses。
+价格依据 https://api-docs.deepseek.com/quick_start/pricing/ 。
 
-## 模型费用与授权
+设置 OPENAI_API_KEY 为进程现有 DEEPSEEK_API_KEY，OPENAI_BASE_URL=https://api.deepseek.com，
+MODEL=deepseek-flash，按试验明确指定 MODEL_REASONING。图像调用同样设置官方配置。
+当前 worktree 无 .env。旧 .env 中平台额度已耗尽，不要复用。不要打印密钥。
+子应用和工具进程会清除 OPENAI_API_KEY、VISUAL_API_KEY、DEEPSEEK_API_KEY。
 
-用户允许复用系统环境变量 DEEPSEEK_API_KEY，向 DeepSeek 官方接口发送测试所需需求、
-提示词、参考图和应用源码，并指定本次累计费用在人民币 5 元以内。
-用户随后明确暂停，恢复后再继续模型实验。
+## 后续优先级
 
-截至暂停，账本记录 42 次调用，按已报告 usage 和当前周末费率估算
-0.070563834 美元，按约 6.7 元/美元折算约 0.47 元。
-账本包含失败的首次计划和空 actions 修复调用。
+1. 先解决测试输出范围和对象归属的一般约束，再进行下一批候选生成。
+2. 将普通 Playwright 与 typed plan 在相同需求、推理档位、预算和隔离条件下对照，
+   同时检查漏断言和误拒合法实现。保留失败样本，限制复核/修订次数。
+3. 根据证据决定是否减少 typed DSL。避免为每个网站增加专用操作码或手写正式用例。
+4. 保留自动生成后真正执行的检查，继续测试其他 Lite 项目的可迁移性。
+5. 通过后重新打包，验证固定入口、文件指纹、凭据排除及平台运行环境。
 
-账本和执行辅助脚本保存在旧实验根目录。
+Windows Chrome 本地测试无法验证 Linux 部署。WSL E 盘挂载曾报 E_ACCESSDENIED，
+Docker daemon 当前不可用，环境修复未纳入此任务。
 
-- deepseek-budget-5cny.json，累计费用和每次调用记录，跨任务继续复用。
-- api_budget.py，在每次请求前按高峰未缓存输入及 24,000 输出 tokens 预留费用，
-  成功后按调用时段和实际 usage 更新，累计上限 0.60 美元，给 5 元预算保留余量。
-- run_budgeted_release.py，固定绝对路径账本的模型运行辅助脚本。
-- test_api_budget.py，预算预留、记账和超预算阻断的离线检查。
+## 本轮回归检查
 
-辅助脚本通过 PYTHONPATH 使用指定 worktree 的框架。切换工作目录时要检查 import 的来源，
-并始终保持账本的绝对路径。正式请求前也要核对可用费率及账本，避免重置累计费用。
-官方端点为 https://api.deepseek.com，模型为 deepseek-flash。
-本地子进程已清空 OPENAI_API_KEY、VISUAL_API_KEY、DEEPSEEK_API_KEY。
-平台运行使用平台注入的模型配置。
+53 项框架和入口测试通过，日志为 output/react-resume-framework-tests.log。
+后端 18 项离线检查通过，其中 4 项实时浏览器检查默认跳过。
+启用浏览器后的首轮有 7 个子项失败，均报告外层 CHECK_TIMEOUT，涉及 2 个测试方法。
+本地辅助脚本将外层进程期限从 45 秒增至 120 秒，保留原业务断言和 Playwright
+用例期限，重跑这 2 个方法通过。实际含 9 个浏览器场景检查，见
+output/react-resume-browser-deadline-retry.log。生产期限未作调整。
+原首轮日志 output/react-resume-plan-live-tests.log 保留。预算守卫离线检查通过。
 
-费用依据 https://api-docs.deepseek.com/quick_start/pricing/ 。
-
-## 测试和送测包
-
-1985aac 的框架与入口单测 48 项通过，日志在新 worktree 的
-output/react-checkpoint-tests.log。此前固定浏览器后端的 13 项真实浏览器测试通过，
-模型兼容 15 项、输入鲁棒 14 项、旧编译器 15 项、打包清单 1 项也通过。
-
-旧目录 output/releases/compiler-react-671be45-20261115.zip 为候选包，463,589 字节。
-SHA256 为 e9ca28edcff0a57c56dca4e6e70f5ad392809394906f31898c29949d1f85e9b2。
-包内 agent-release.json 指定 react 引擎，并记录源码提交和全部文件指纹。
-已检查根目录入口、依赖和运行时、文件指纹，以及本地凭据和输出目录的排除。
-BookStack 首轮从这个包解压的固定入口运行，自动准备 Playwright，自动验收 12/12，
-外部验收 10/12。
-
-源码 checkout 的默认引擎为 staged，实验运行需加 --engine react。
-打包使用 python scripts/package.py --engine react --output RELEASE.zip。
-上传包通过 agent-release.json 默认选择 react，平台固定启动命令无需额外引擎参数。
-自动浏览器工具固定为 @playwright/test 1.55.0，准备在生成应用外部。
-
-本轮真实运行环境为 Windows + 已安装 Chrome。
-Docker Linux daemon 未运行；WSL Ubuntu 因挂载 D:/WSL_Storage/ext4.vhdx 被拒绝而未能启动。
-Linux Chromium 准备路径和云端送测仍待验证。
-
-## 图与研究资料
-
-框架图保存在旧实验目录 architecture/react-architecture.png 和 .svg。
-采用双栏旧框架/Hybrid 结构，底部标明待验证项目，SVG 可以继续编辑。
-
-研究及差异分析见 REACT_EXPERIMENT.md。已参考 mini-swe-agent 的线性对话与限额控制、
-Deep Agents 的简化提示和工具设计、harness tracing 与验证循环、Playwright 官方定位文档。
-早期平台日志和本地实验的环境、端点及缓存不同，时间比值仍需受控实验核验。
+用户需求 ZIP 包含 6 份 requirements.yaml 和 69 张参考图。文字验收场景嵌在 YAML
+的 scenarios/Given/When/Then 中。当前 Playwright 文件由测试编译器生成。
+.source-archive.json 是本地展开时追加的指纹文件。外部回放测试来自单独保存的目录。

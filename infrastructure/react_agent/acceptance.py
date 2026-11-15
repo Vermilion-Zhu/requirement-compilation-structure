@@ -16,11 +16,15 @@ TEST_INSTRUCTIONS = """Compile the supplied website requirement contracts into P
 You receive original evidence and website defaults. Derive expected behavior from those
 contracts. All implementation_ids need coverage. Each scenario needs its relevant Given,
 When, Then observations. Preserve original names, roles, states, identity and persistence.
+implementation_ids is the complete requested output scope. Other contracts remain as
+prerequisite context. Emit cases and spec files only for the requested IDs, with shared helpers.
 Report ambiguity in warnings. Apply defaults only to unspecified properties.
 ui_declarations contains source-linked role annotations. Where a declaration supplies
 default_accessible_name, assert that exact computed accessible name in addition to
 role and visible text, unless an explicit original clause overrides it. A hasText filter
 does not verify accessible name. List declaration IDs exercised by each case in ui_checks.
+Visible status content follows its original clause, including numeric and dynamic values.
+An accessible name alone does not require the same words in the element's visible body.
 Declarations with container must be tested within that parent element, including actions
 contained by feedback. Preserve these relationships as well as individual element names.
 
@@ -40,11 +44,19 @@ small enough to run during implementation. Generate all files in this single res
 """
 
 
-def generate_tests(requirements: Path, output: Path, *, model=None, timeout=180, validation_feedback=None) -> dict:
+def generate_tests(requirements: Path, output: Path, *, model=None, timeout=180, validation_feedback=None,
+                   implementation_ids: list[str] | None = None) -> dict:
     """Create a new suite and an evidence manifest with one model request."""
     if timeout <= 0:
         raise ValueError("timeout must be positive")
     raw, contracts = compile_requirements(requirements)
+    if implementation_ids is not None:
+        known = set(contracts["implementation_ids"])
+        selected = set(implementation_ids)
+        if not selected or len(selected) != len(implementation_ids) or selected - known:
+            raise ValueError("Select distinct known implementation IDs")
+        contracts = {**contracts, "implementation_ids": [
+            rid for rid in contracts["implementation_ids"] if rid in selected]}
     output = output.resolve()
     input_root = requirements.resolve()
     if output.is_relative_to(input_root) or input_root.is_relative_to(output):
@@ -92,6 +104,7 @@ def generate_tests(requirements: Path, output: Path, *, model=None, timeout=180,
     covered = {case["requirement_id"] for case in cases}
     checked_ui = {uid for case in cases for uid in case.get("ui_checks", [])}
     report = {"status": "GENERATED", "source_sha256": contracts["source_sha256"],
+              "implementation_ids": contracts["implementation_ids"],
               "compiler": fingerprint(TEST_INSTRUCTIONS),
               "requirement_sha256": contracts["requirement_sha256"],
               "cases": cases, "uncovered_requirements": sorted(known-covered),
