@@ -19,6 +19,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import tomllib
 import zipfile
 
 
@@ -36,6 +37,11 @@ def package_directory(root: Path, output: Path, *, engine="staged") -> int:
     """Archive non-ignored entries, replacing the output only on success."""
     if engine not in {"staged", "react"}:
         raise ValueError("Unknown execution engine")
+    version = None
+    metadata = root / "pyproject.toml"
+    if metadata.is_file():
+        with metadata.open("rb") as stream:
+            version = tomllib.load(stream).get("project", {}).get("version")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(prefix=f".{output.name}.", suffix=".tmp",
             dir=output.parent, delete=False) as temporary:
@@ -79,7 +85,7 @@ def package_directory(root: Path, output: Path, *, engine="staged") -> int:
                                     capture_output=True, text=True, check=True).stdout.strip()
             dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=root,
                                    capture_output=True, text=True, check=True).stdout.splitlines()
-            manifest = {"schema_version": 1, "engine": engine, "source_commit": commit,
+            manifest = {"schema_version": 1, "engine": engine, "version": version, "source_commit": commit,
                         "dirty_paths": dirty, "files": files}
             archive.writestr("agent-release.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
             entries += 1

@@ -1,6 +1,6 @@
 # 轻量网站 Agent 阶段交接
 
-更新于 2026-11-15。用户已恢复实验，当前目标 active。
+更新于 2026-11-15。用户继续整理实验分支的 README、版本和送测候选包。
 
 ## 开发位置和交付目标
 
@@ -19,8 +19,8 @@
 - 本地浏览器使用 channel=chrome。Linux、平台 Chromium 和云端运行仍待验证。
 
 源码入口默认 staged。scripts/package.py --engine react 生成的包通过 agent-release.json
-选择轻量引擎。最新本地候选包为当前目录 output/releases/compiler-react-26fb48d-20261115.zip。
-末节记录打包指纹和实际验证范围。旧目录仍保留 671be45 包供历史对照。
+选择轻量引擎。正式编号候选包按 output/releases/compiler-react-0.1.0a1-提交短哈希.zip 命名。
+末节记录发布规则和验证结果位置。26fb48d 与 671be45 包供历史对照。
 
 ## 框架当前状态
 
@@ -186,3 +186,20 @@ output/react-26fb48d-release-validation.json 和 output/react-26fb48d-export-con
 
 累计账本 94 次调用、估算 0.240728088 美元，沿用原 5 元授权和 0.60 美元守卫上限。
 本轮付费和浏览器检查进程均已结束。后续可从当前初步原型继续做跨任务推广。
+
+## 0.1.0a1 发布整理
+
+用户要求整理实验分支 README、解释框架思想与相对原框架的细节和成效，并提供送测包。
+README 已改为中文分支说明，含架构图、十三阶段职责映射、模块位置、逐版变化、
+真实结果、失败归因、运行命令和后续优化事项。
+
+正式发布版本复用 pyproject.toml 的 project.version，首个编号为 0.1.0a1，
+uv.lock 的本地项目版本同步。scripts/package.py 自动将版本写入 agent-release.json。
+Git 标签采用 react-v0.1.0a1，ZIP 采用 compiler-react-版本号-提交短哈希.zip。
+历史实验目录继续沿用原命名，源码用 Git 提交和内容指纹定位。
+
+本轮执行逻辑的变化集中在发布清单版本字段，网站生成引擎使用当前 typed-plan 流程。
+本轮 53 项框架/入口回归和 2 项打包回归日志分别在
+output/release-0.1.0a1-framework-tests.log 与 output/release-0.1.0a1-package-tests.log。
+实际发布 ZIP、SHA256、清单和导出入口核对结果写入
+output/releases/react-0.1.0a1-validation.json。平台 Linux/Chromium 实测待补充。
