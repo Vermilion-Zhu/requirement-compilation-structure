@@ -272,3 +272,60 @@ test compiler, preserving complete source context. Empty, duplicate and unknown 
 are rejected before model dispatch, and out-of-scope cases remain rejected before writing.
 The default submission pipeline still uses typed plans. Latest details, evidence paths and
 cumulative budget are in REACT_HANDOFF.md.
+
+## 2026-11-15 completed initial experiment and candidate
+
+Source and framework comparison, independent development branch, live-model local trials,
+regression checks and an exportable ArcBench source candidate are available. Production
+promotion still requires broader tasks and platform validation.
+
+The current execution path is shown below. The dashed branch is a local experiment.
+
+```mermaid
+flowchart LR
+  R["原始 YAML、Given/When/Then、参考图"] --> C["保留原文和来源的需求契约"]
+  C --> T["分批生成 typed plan"]
+  T --> F["编译、冻结和收集测试"]
+  F --> A["单会话 ReAct 实现应用"]
+  A --> V["构建、启动和 Playwright 验收"]
+  V -->|失败反馈| A
+  V -->|通过| O["应用与可核查运行记录"]
+  C -.-> N["普通 Playwright 测试生成实验"]
+  N -.-> Q["TypeScript 检查、源文复核、合法布局校准"]
+```
+
+Focused native v5 took 20.922 seconds and collected two cases. TypeScript then caught
+misspelled helper imports. Independent review returned four findings. Three literal
+source quotes matched, one failed validation, and one finding repeated another concern.
+The first two findings were manually accepted for one source-only correction. Candidate
+v6 took 17.5 seconds, collected two cases and passed TypeScript compilation. Its entity
+ownership helper still selected by DOM order. Four synthetic layouts passed two and
+failed two. An existing-application control passed one case and failed one at an
+answer Author region. The answer Author role is insufficiently explicit to attribute
+that failure confidently to application code. No application repair used these candidates.
+
+A zero-model run executed every original calibrated typed case with maxFailures=0.
+Results were 21 passed, 6 failed, 0 skipped, about 240.7 seconds of Playwright execution.
+Three failures involved global name/Score locators. One comment-navigation test reused
+a question-feed button declaration on a search-results link. Two comment cases reached
+an Add-a-comment action outside Question post, conflicting with the explicit within
+clause. Their setup actors also need source review. These are local generated tests,
+and the earlier manually calibrated counter assertion remains part of this test version.
+
+Compiled contract payloads range from 15,832 bytes for BookStack Lite to 143,114 bytes
+for 12306. UI declaration indexes account for roughly 10–22 percent of these payloads.
+The audit preserves source clauses and does not change runtime prompts. See
+output/react-contract-payload-audit.json.
+
+The clean source candidate is output/releases/compiler-react-26fb48d-20261115.zip,
+473,209 bytes, SHA256 964461554cf7cace9a0c13516627f9bf950044cb8a2af79e0fccd4896cddab2d.
+It records commit 26fb48dd98eec718fe19772178a5eb4c07dc1d86 and engine react. All 205
+manifest file hashes, path boundaries and credential/output exclusions were checked.
+The exported fixed entry selected react with a mocked compiler call. The exported
+framework then built an existing Keep application and passed its external 11-case
+regression. This control has zero model calls and does not measure fresh generation.
+Linux/Chromium/cloud validation remains pending.
+
+The shared cost ledger now contains 94 calls and estimates USD 0.240728088, within the
+original cumulative guard. Research links for mini-SWE-agent, Deep Agents overview,
+Deep Agents v0.7 and Anthropic's application harness were reopened on 2026-11-15.

@@ -19,8 +19,8 @@
 - 本地浏览器使用 channel=chrome。Linux、平台 Chromium 和云端运行仍待验证。
 
 源码入口默认 staged。scripts/package.py --engine react 生成的包通过 agent-release.json
-选择轻量引擎。最近保留的候选包仍为旧目录 output/releases/compiler-react-671be45-20261115.zip，
-已经落后于源码，后续送测前需要重新打包和验证。
+选择轻量引擎。最新本地候选包为当前目录 output/releases/compiler-react-26fb48d-20261115.zip。
+末节记录打包指纹和实际验证范围。旧目录仍保留 671be45 包供历史对照。
 
 ## 框架当前状态
 
@@ -153,3 +153,36 @@ output/react-resume-browser-deadline-retry.log。生产期限未作调整。
 用户需求 ZIP 包含 6 份 requirements.yaml 和 69 张参考图。文字验收场景嵌在 YAML
 的 scenarios/Given/When/Then 中。当前 Playwright 文件由测试编译器生成。
 .source-archive.json 是本地展开时追加的指纹文件。外部回放测试来自单独保存的目录。
+
+## 2026-11-15 后续核验与候选包
+
+本轮没有修改正式执行代码。分批范围修正后的 native v5 在 20.922 秒生成两例并收集，
+TypeScript 检查检出 HELPEFUL_USER 导入拼写错误。独立复核的 4 条发现中一条原文
+引用校验失败，一条内容重复。人工接受前两条有效发现后只做了一轮修正。
+v6 在 17.5 秒生成两例，收集及 TypeScript 检查通过。父问题分数仍用 DOM 顺序，
+合法嵌套/同级布局四例校准为 2 通过/2 失败。已有应用对照为 1 通过/1 失败，失败在
+答案 Author 区域。原文对答案 Author 的具体 role 不够明确，该失败归因保留待定。
+应用未接收这些候选测试的修复指令。
+
+原 status-v3 冻结测试以 maxFailures=0 跑完，结果 21 通过、6 失败、0 跳过，
+Playwright 约 240.7 秒。三个失败来自全页同名标题或 Score 定位。一个评论导航用例
+把 Questions feed 的 button 声明用于 Search results 的 link。两个评论用例在
+Question post 内找不到 Add a comment，应用将 Comments 放在其同级，而 REQ-5.2
+明确规定 within Question post。两例的前置创建身份另有遗漏，仍需同时复核。
+这次检查未修改应用，原先 20/1/6 的记录保留。结果在
+output/stackoverflow-status-v3-all-cases-check.json。
+
+完整需求载荷审计在 output/react-contract-payload-audit.json。UI 索引占输入约
+10–22%，完整原始条款占多数。该审计没有裁剪运行上下文。
+
+新候选源码包为当前目录 output/releases/compiler-react-26fb48d-20261115.zip。
+473,209 字节，SHA256 为 964461554cf7cace9a0c13516627f9bf950044cb8a2af79e0fccd4896cddab2d。
+源码提交 26fb48dd98eec718fe19772178a5eb4c07dc1d86，打包时工作区干净，engine=react。
+205 个文件指纹、路径边界、凭据和输出排除检查通过。解压入口默认选 react，
+编译器调用使用 mock 验证接线。解压框架对已有 Keep 应用真实构建并跑过外部 11/11。
+该检查零模型调用，属于已有应用回归。验证记录为
+output/react-26fb48d-release-validation.json 和 output/react-26fb48d-export-control.json。
+已有 test_package_release.py 一项通过。包内源码尚未通过 Linux/Chromium 云端实测。
+
+累计账本 94 次调用、估算 0.240728088 美元，沿用原 5 元授权和 0.60 美元守卫上限。
+本轮付费和浏览器检查进程均已结束。后续可从当前初步原型继续做跨任务推广。
