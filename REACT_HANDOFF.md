@@ -19,7 +19,7 @@
 - 本地浏览器使用 channel=chrome。Linux、平台 Chromium 和云端运行仍待验证。
 
 源码入口默认 staged。scripts/package.py --engine react 生成的包通过 agent-release.json
-选择轻量引擎。送测包按 output/releases/用途 YYYYMMDD dzs.zip 命名，当前为 Lightweight ReAct 20261115 dzs.zip。
+选择轻量引擎。后续送测包按 output/releases/Lite 用途 YYYYMMDD dzs.zip 命名，展示版本使用 Lite 前缀。
 末节记录发布规则和验证结果位置。26fb48d 与 671be45 包供历史对照。
 
 ## 框架当前状态
@@ -239,3 +239,11 @@ output/bookstack-platform-20261115/fresh-workflow-controls-v1.evaluation.json。
 这一点作为测试语义和成本问题保留，后续优化需从框架处理。0.1.0a2平台回送待验证。
 候选ZIP按用户规则命名 Workflow Controls and Evaluation 20261115 dzs.zip，
 版本、提交和指纹核对结果保存于 output/releases/workflow-controls-0.1.0a2-validation.json。
+
+
+## Lite 命名约定
+
+用户已将0.1.0a2送测包的用途改为light并交组长送测，要求后续版本统一有lite类标识。
+统一展示为 Lite，后续版本名称如 Lite 0.1.0a3，ZIP 按 Lite 用途 YYYYMMDD dzs.zip。
+后续 Git 标签采用 lite-v0.1.0a3 形式，数值版本继续由 pyproject.toml 管理。
+历史react-v标签和已发布包通过原有提交、版本与文件指纹定位。

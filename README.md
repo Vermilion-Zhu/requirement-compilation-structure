@@ -1,6 +1,6 @@
-# Requirement Compiler · 轻量网站生成实验
+# Requirement Compiler Lite
 
-本分支面向 ArcBench 网站生成任务，将 `requirements.yaml`、Given/When/Then 验收场景和参考图转换为 React + Express + SQLite 应用。当前 Agent 开发候选版本为 **0.1.0a2**，开发分支为 `experiment/react-lite`。
+本分支面向 ArcBench 网站生成任务，将 `requirements.yaml`、Given/When/Then 验收场景和参考图转换为 React + Express + SQLite 应用。当前 Agent 开发候选版本展示为 **Lite 0.1.0a2**，开发分支为 `experiment/react-lite`。
 
 轻量引擎使用保留原文的需求契约、独立生成的浏览器测试和单会话 ReAct 实现循环。当前送测路径采用结构化测试计划，控制器将计划编译为 Playwright 并冻结后交给实现 Agent 验收。普通 Playwright 源码生成处于可行性实验阶段。
 
@@ -380,17 +380,17 @@ uv run python scripts/evaluate_react.py input -o outputs/fresh-trial --external-
 
 - `pyproject.toml` 的 `project.version` 为 Agent 发布版本的唯一配置来源，采用 PEP 440。当前开发候选为 `0.1.0a2`，已经编号发布的历史版本为 `0.1.0a1`。
 - 每个对外送测版本分配递增版本号。后续提示词、生成逻辑或测试语义调整递增 alpha 序号，较大的架构实验可进入 `0.2.0a1`。
-- Git 提交标识精确源码快照。标签使用 `react-v0.1.0a1` 形式，已送测标签固定指向该次发布快照。
+- 轻量框架统一使用 `Lite` 标识，版本展示如 `Lite 0.1.0a3`，后续标签采用 `lite-v0.1.0a3`。数值版本继续由 `pyproject.toml` 管理。历史标签 `react-v0.1.0a1`、`react-v0.1.0a2` 对应各自的已发布快照。
 - `keep-v6-auto`、`bookstack-v3-auto`、`focused-v6` 是试验目录名称，一次源码版本可以对应多个试验。历史轮次通过原有提交和指纹追踪。
 - `uv.lock` 的本地项目版本随 `pyproject.toml` 更新。打包器自动读取项目版本，写入 `agent-release.json`。
-- 送测 ZIP 按 `用途 YYYYMMDD dzs.zip` 命名。当前候选包为 `Workflow Controls and Evaluation 20261115 dzs.zip`。版本号和源码提交记录在包内清单，整包 SHA256 用于核对实际上传文件。
+- 后续送测 ZIP 按 `Lite 用途 YYYYMMDD dzs.zip` 命名，例如 `Lite Workflow Controls YYYYMMDD dzs.zip`。0.1.0a2 已由用户将用途改为 `light` 后交组长送测。版本号和源码提交记录在包内清单，整包 SHA256 用于核对实际上传文件。
 
 ### 打包
 
 在已提交的仓库根目录执行，输出放入忽略目录。
 
 ```bash
-uv run python scripts/package.py --engine react --output "output/releases/Workflow Controls and Evaluation 20261115 dzs.zip"
+uv run python scripts/package.py --engine react --output "output/releases/Lite Workflow Controls YYYYMMDD dzs.zip"
 ```
 
 包根目录包括 `main.py`、Python 依赖、应用模板和 `arcbench-agent-runtime/`。`agent-release.json` 记录以下字段。
