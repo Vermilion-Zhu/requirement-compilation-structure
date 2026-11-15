@@ -367,14 +367,14 @@ uv run python -m unittest discover -s tests -p test_browser_plans.py
 - Git 提交标识精确源码快照。标签使用 `react-v0.1.0a1` 形式，已送测标签固定指向该次发布快照。
 - `keep-v6-auto`、`bookstack-v3-auto`、`focused-v6` 是试验目录名称，一次源码版本可以对应多个试验。历史轮次通过原有提交和指纹追踪。
 - `uv.lock` 的本地项目版本随 `pyproject.toml` 更新。打包器自动读取项目版本，写入 `agent-release.json`。
-- 本地 ZIP 使用 `compiler-react-版本号-提交短哈希.zip`，整包 SHA256 用于核对实际上传文件。
+- 送测 ZIP 按 `用途 YYYYMMDD dzs.zip` 命名。当前包为 `Lightweight ReAct 20261115 dzs.zip`。版本号和源码提交记录在包内清单，整包 SHA256 用于核对实际上传文件。
 
 ### 打包
 
 在已提交的仓库根目录执行，输出放入忽略目录。
 
 ```bash
-uv run python scripts/package.py --engine react --output output/releases/compiler-react-0.1.0a1-COMMIT.zip
+uv run python scripts/package.py --engine react --output "output/releases/Lightweight ReAct 20261115 dzs.zip"
 ```
 
 包根目录包括 `main.py`、Python 依赖、应用模板和 `arcbench-agent-runtime/`。`agent-release.json` 记录以下字段。

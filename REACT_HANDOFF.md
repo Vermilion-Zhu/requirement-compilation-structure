@@ -19,7 +19,7 @@
 - 本地浏览器使用 channel=chrome。Linux、平台 Chromium 和云端运行仍待验证。
 
 源码入口默认 staged。scripts/package.py --engine react 生成的包通过 agent-release.json
-选择轻量引擎。正式编号候选包按 output/releases/compiler-react-0.1.0a1-提交短哈希.zip 命名。
+选择轻量引擎。送测包按 output/releases/用途 YYYYMMDD dzs.zip 命名，当前为 Lightweight ReAct 20261115 dzs.zip。
 末节记录发布规则和验证结果位置。26fb48d 与 671be45 包供历史对照。
 
 ## 框架当前状态
@@ -195,7 +195,7 @@ README 已改为中文分支说明，含架构图、十三阶段职责映射、�
 
 正式发布版本复用 pyproject.toml 的 project.version，首个编号为 0.1.0a1，
 uv.lock 的本地项目版本同步。scripts/package.py 自动将版本写入 agent-release.json。
-Git 标签采用 react-v0.1.0a1，ZIP 采用 compiler-react-版本号-提交短哈希.zip。
+Git 标签采用 react-v0.1.0a1。用户指定送测 ZIP 使用 用途 YYYYMMDD dzs.zip，当前为 Lightweight ReAct 20261115 dzs.zip。
 历史实验目录继续沿用原命名，源码用 Git 提交和内容指纹定位。
 
 本轮执行逻辑的变化集中在发布清单版本字段，网站生成引擎使用当前 typed-plan 流程。
