@@ -60,13 +60,17 @@ def summarize(report: dict, returncode: int) -> dict:
 
 
 class BrowserSuite:
-    def __init__(self, directory: Path, cli: Path, *, channel: str | None = None, max_failures=1):
+    def __init__(self, directory: Path, cli: Path, *, channel: str | None = None, max_failures=1,
+                 test_timeout=30000):
         self.directory = directory.resolve()
         self.cli = cli.resolve()
         if not self.directory.is_dir() or not self.cli.is_file():
             raise ValueError("Acceptance directory and Playwright CLI must exist")
         self.channel = channel
         self.max_failures = max_failures
+        if test_timeout <= 0:
+            raise ValueError("Test timeout must be positive")
+        self.test_timeout = test_timeout
         self.hashes = self.snapshot()
         manifest = self.directory / "acceptance-manifest.json"
         self.manifest = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else None
@@ -97,7 +101,7 @@ class BrowserSuite:
         if self.channel:
             use["channel"] = self.channel
         config = {"testDir": str(self.directory), "testMatch": "*.spec.ts", "workers": 1,
-                  "retries": 0, "fullyParallel": False, "timeout": 30000,
+                  "retries": 0, "fullyParallel": False, "timeout": self.test_timeout,
                   "maxFailures": self.max_failures,
                   "outputDir": str(artifacts / "artifacts"), "use": use}
         path = artifacts / "playwright.config.cjs"

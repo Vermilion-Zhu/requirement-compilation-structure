@@ -28,6 +28,7 @@ text, while ordinary unique titles receive a bracketed suffix. Preserve field fo
 length limits and negative test data. Fixed seed credentials must remain literal.
 Keep actions grounded in original Given/When/Then outcomes. Cover identity, rejection
 and reload when required.
+Apply website_defaults to properties the original source leaves unspecified, including action roles.
 Start each case with goto using the original entry path.
 
 Steps have op and relevant fields. goto uses url (same-origin path), reload has no target.

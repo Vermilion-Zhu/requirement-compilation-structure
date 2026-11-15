@@ -92,6 +92,18 @@ class ReactAgentTests(unittest.TestCase):
         self.assertEqual({r["id"] for r in payload["contracts"]}, {"ROOT", "A", "B"})
         self.assertEqual(report["uncovered_requirements"], [])
 
+    def test_workflow_role_defaults_preserve_explicit_roles_and_source(self):
+        original = ('"Open record"(role=link) opens an editor. '
+                    'Create record opens a creation form. Archive may be a link or button.')
+        (self.input / "requirements.yaml").write_text(
+            "id: R\ndescription: " + json.dumps(original) + "\n", encoding="utf-8")
+        raw, contracts = compile_requirements(self.input)
+        self.assertIn("native buttons", contracts["website_defaults"]["workflow_controls"])
+        self.assertEqual(contracts["contracts"][0]["description"], raw["description"])
+        self.assertEqual([(item["label"], item["role"]) for item in contracts["ui_declarations"]],
+                         [("Open record", "link")])
+        self.assertIn("Explicit roles and allowed alternatives", contracts["website_defaults"]["workflow_controls"])
+
     def test_invalid_executable_test_selection_stops_before_model_or_output(self):
         (self.input / "requirements.yaml").write_text("id: A\ndescription: Workflow\n", encoding="utf-8")
         model = Mock()

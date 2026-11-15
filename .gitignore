@@ -8,6 +8,7 @@ docs/
 /scripts/*
 !/scripts/package.py
 !/scripts/analyze_log.py
+!/scripts/evaluate_react.py
 
 AGENTS.md
 .vscode/

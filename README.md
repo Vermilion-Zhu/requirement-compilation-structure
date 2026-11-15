@@ -1,6 +1,6 @@
 # Requirement Compiler · 轻量网站生成实验
 
-本分支面向 ArcBench 网站生成任务，将 `requirements.yaml`、Given/When/Then 验收场景和参考图转换为 React + Express + SQLite 应用。当前 Agent 发布版本为 **0.1.0a1**，开发分支为 `experiment/react-lite`。
+本分支面向 ArcBench 网站生成任务，将 `requirements.yaml`、Given/When/Then 验收场景和参考图转换为 React + Express + SQLite 应用。当前 Agent 开发候选版本为 **0.1.0a2**，开发分支为 `experiment/react-lite`。
 
 轻量引擎使用保留原文的需求契约、独立生成的浏览器测试和单会话 ReAct 实现循环。当前送测路径采用结构化测试计划，控制器将计划编译为 Playwright 并冻结后交给实现 Agent 验收。普通 Playwright 源码生成处于可行性实验阶段。
 
@@ -12,7 +12,7 @@
 | --- | --- |
 | Keep 从零生成 | 一轮总耗时 225.7 秒，自动测试 11/11，另存外部测试 11/11 |
 | BookStack Lite 从零生成 | 一轮总耗时 369.6 秒，自动测试 12/12，另存外部测试 10/12 |
-| BookStack Lite 恢复修复 | 使用已暴露的外部测试修复，153.4 秒后自动与外部测试均为 12/12 |
+| BookStack 本次平台生成 | 用户反馈外部测试 6/12，生成应用自测报告为 12/12，已进入原包复现 |
 | StackOverflow Lite 从零生成 | 触及 900 秒总时限，状态为 TIME_LIMIT |
 | StackOverflow 已有应用全量检查 | 经人工校准的冻结计划为 21 通过、6 失败、0 跳过 |
 | 框架与入口回归 | 53 项通过 |
@@ -21,7 +21,7 @@
 
 这些运行采用不同阶段的框架检查点。每项成绩对应自己的输入、模型配置、测试版本和运行记录。外部测试保存在本地回放目录，Keep 套件的独立官方来源仍待核实。BookStack Lite 的 12 个场景和完整 BookStack 的 35 个场景分别记录。
 
-当前待验证范围包括新发布包的完整从零生成、Linux/Chromium 平台运行，以及 PrestaShop、12306、Ctrip 的真实模型生成。上述 StackOverflow 数字描述本地生成测试的执行情况，其中存在测试本身的定位错误。
+当前待核查本次平台生成应用的实际失败动作和自测漏检原因，并继续验证其他任务。PrestaShop、12306、Ctrip 的真实模型生成仍待执行。上述 StackOverflow 数字描述本地生成测试的执行情况，其中存在测试本身的定位错误。
 
 ## 设计目标与取舍
 
@@ -113,6 +113,8 @@ flowchart LR
 
 虚线部分记录本地研究路径。当前发布包通过实线流程执行。
 
+创建、编辑等工作流动作在角色未指定时默认使用原生按钮，包括通过 URL 打开编辑器或创建表单的动作。原文显式角色和允许的替代形式优先，导航和记录目的地链接使用链接。实现与测试生成共享这项默认解释。
+
 ### 一轮运行的具体步骤
 
 1. 读取完整源 YAML，建立需求契约、来源指针、UI 声明和输入指纹。
@@ -187,6 +189,7 @@ git log --oneline 39eae6b..experiment/react-lite
 | [browser_tools.py](infrastructure/react_agent/browser_tools.py) | 准备 `@playwright/test@1.55.0` 和浏览器 |
 | [provenance.py](infrastructure/react_agent/provenance.py) | 框架源码、基础提示、Git 与导出环境的内容身份 |
 | [acceptance.py](infrastructure/react_agent/acceptance.py) | 普通 Playwright 源码生成实验，支持指定需求范围并保留完整上下文 |
+| [scripts/evaluate_react.py](scripts/evaluate_react.py) | 从原始需求生成新应用，生成结束后执行固定外部套件并保存完整结果 |
 | [scripts/package.py](scripts/package.py) | 依照 Git 忽略规则打包，记录版本、引擎、提交和文件指纹 |
 | [test_react_agent.py](tests/test_react_agent.py) | 实现循环、工具、来源、恢复、验收和普通测试批次的框架回归 |
 | [test_react_submission.py](tests/test_react_submission.py) | 自动测试编译、共享期限、失败记录和平台入口回归 |
@@ -202,7 +205,7 @@ git log --oneline 39eae6b..experiment/react-lite
 | `513b5fa` | 来源关联契约、单会话实现、独立验收 | 建立跨层网站生成原型 |
 | `671be45` | 自动结构化验收、每例隔离、运行身份、固定送测入口 | Keep 和 BookStack Lite 进入自动生成测试的完整链路 |
 | `1985aac` | 按场景规模分批，增加显式表单标签关联和优先 `verify` 约定 | 控制单次输出规模，针对已有标签兼容差异保留回归 |
-| `2a7a00c` | 分批保留完整上下文，恢复会话先实际验收 | 减少跨批前置流程缺失，BookStack 恢复修复到外部 12/12 |
+| `2a7a00c` | 分批保留完整上下文，恢复会话先实际验收 | 保留跨批前置流程，并在恢复时向模型提供实际检查结果 |
 | `9119d9f` | 记录 StackOverflow 首轮超时和坏邮箱数据 | 保存模型为错误测试放宽应用校验的失败样本 |
 | `ef9bc33` | `${unique}` 位置模板和旧邮箱计划兼容 | 标识进入邮箱 local part，保留负例和固定种子，原生邮箱校验回归通过 |
 | `bce96bd` | 记录动态 status 语义错误 | 识别出框架把状态名称当作正文的误判 |
@@ -219,7 +222,7 @@ git log --oneline 39eae6b..experiment/react-lite
 
 ### 测试质量暴露的问题
 
-- BookStack 首轮自动测试通过 12/12，外部测试为 10/12。两例失败集中在预填多行字段的标签定位。显式 `htmlFor/id` 关联后，恢复修复通过外部 12/12，该阶段已经暴露外部测试。
+- BookStack 首轮自动测试通过 12/12，外部测试为 10/12。两例失败集中在预填多行字段的标签定位。旧应用随后使用外部测试恢复修复的过程仅用于诊断。框架优化的验证采用从原始需求重新生成应用后执行外部测试。
 - StackOverflow 的旧唯一值处理破坏邮箱格式，模型随之放宽应用校验。框架已修复数据生成方式，原失败应用和测试版本保留。
 - 动态状态曾被隐式要求包含自己的可访问名称。后端已修正，依赖旧隐式行为的测试内容覆盖仍需复核。
 - StackOverflow 全量 27 例中，三个失败涉及全页同名标题或 Score，另一个导航用例把问题列表的 button 用到搜索结果的 link。两个评论用例发现 Add a comment 位于 Question post 之外，与明确的 `within` 条款冲突，前置创建身份另有覆盖遗漏。
@@ -358,12 +361,22 @@ uv run python -m unittest discover -s tests -p test_browser_plans.py
 
 `tests/` 是框架回归测试。送测运行中的网站验收从用户提供的需求动态生成。历史实验的应用、计划和日志保存于本机忽略的 `output/`，Git 版本保存框架与提示词。
 
+## 从零生成与固定外部验收
+
+本地候选验证使用新输出目录，依次执行框架的完整生成、自生成验收及固定外部用例。外部测试作为生成结束后的检查输入。自动测试通过而外部测试失败时，整轮结果为失败。
+
+```bash
+uv run python scripts/evaluate_react.py input -o outputs/fresh-trial --external-tests PATH_TO_EXTERNAL_TESTS --playwright-cli PATH_TO_PLAYWRIGHT_CLI --channel chrome --test-timeout-ms 10000
+```
+
+结果写入 `outputs/fresh-trial.evaluation.json`，保存框架指纹、模型运行报告、应用源码指纹、外部用例指纹和完整失败结果。脚本要求新的输出路径，生成应用作为这次框架验证的唯一应用实例。BookStack 本次平台每例为 10 秒，本地可通过参数匹配对应评测的用例期限。
+
 ## 版本管理与送测包
 
 ### 发布版本、提交和试验轮次
 
-- `pyproject.toml` 的 `project.version` 为 Agent 发布版本的唯一配置来源，采用 PEP 440。当前为 `0.1.0a1`，表示第一轮正式编号的 alpha 发布。
-- 每个对外送测版本分配递增版本号。下一轮提示词、生成逻辑或测试语义调整可发布为 `0.1.0a2`，较大的架构实验可进入 `0.2.0a1`。
+- `pyproject.toml` 的 `project.version` 为 Agent 发布版本的唯一配置来源，采用 PEP 440。当前开发候选为 `0.1.0a2`，已经编号发布的历史版本为 `0.1.0a1`。
+- 每个对外送测版本分配递增版本号。后续提示词、生成逻辑或测试语义调整递增 alpha 序号，较大的架构实验可进入 `0.2.0a1`。
 - Git 提交标识精确源码快照。标签使用 `react-v0.1.0a1` 形式，已送测标签固定指向该次发布快照。
 - `keep-v6-auto`、`bookstack-v3-auto`、`focused-v6` 是试验目录名称，一次源码版本可以对应多个试验。历史轮次通过原有提交和指纹追踪。
 - `uv.lock` 的本地项目版本随 `pyproject.toml` 更新。打包器自动读取项目版本，写入 `agent-release.json`。
@@ -390,7 +403,7 @@ uv run python scripts/package.py --engine react --output "output/releases/Lightw
 
 源码 checkout 默认选择 `staged`。带有 `engine=react` 发布清单的送测包，通过平台固定的 `main.py INPUT --output-dir OUTPUT` 命令进入轻量引擎。
 
-打包器依据 Git 忽略规则排除 `.env`、Git 元数据、本地输入、外部检出目录、生成输出和旧 ZIP。正式上传前核对清单、文件指纹、入口选择和实际运行记录。当前版本的 Linux/Chromium 平台评测仍待补充。
+打包器依据 Git 忽略规则排除 `.env`、Git 元数据、本地输入、外部检出目录、生成输出和旧 ZIP。正式上传前核对清单、文件指纹、入口选择和实际运行记录。本次 BookStack 平台送测已反馈 6/12，生成结果的本地复现正在进行。
 
 ## 参考策略与研究记录
 

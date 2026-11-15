@@ -329,3 +329,8 @@ Linux/Chromium/cloud validation remains pending.
 The shared cost ledger now contains 94 calls and estimates USD 0.240728088, within the
 original cumulative guard. Research links for mini-SWE-agent, Deep Agents overview,
 Deep Agents v0.7 and Anthropic's application harness were reopened on 2026-11-15.
+
+
+## Evaluation correction after platform run 7557958c3fd3
+
+The user requires framework-level fixes and fresh application generation for validation. Historical repairs of an existing BookStack application after exposing external tests are diagnostic evidence. Their 12/12 result has been removed from the README performance table. The new platform-generated application reported internal acceptance 12/12 while external evaluation passed 6/12. The source input fingerprint matches the earlier Lite input. The downloaded application and runtime logs are being replayed without source edits.

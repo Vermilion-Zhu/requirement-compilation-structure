@@ -47,6 +47,11 @@ class ReactSubmissionTests(unittest.TestCase):
         request = self.tests.generate.call_args
         self.assertEqual(request.kwargs["instructions"], PLAN_INSTRUCTIONS)
         self.assertNotIn("application_root", json.loads(request.args[0][0]["content"]))
+        test_contracts = json.loads(request.args[0][0]["content"])
+        implementation_contracts = json.loads(
+            self.implementation.generate.call_args.args[0][0]["content"])["requirement_contracts"]
+        self.assertIn("workflow_controls", test_contracts["website_defaults"])
+        self.assertEqual(test_contracts["website_defaults"], implementation_contracts["website_defaults"])
         self.assertEqual(report["status"], "ACCEPTANCE_PASSED")
         self.assertTrue(report["behavior_verified"])
         self.assertGreaterEqual(report["elapsed_seconds"], report["test_generation"]["elapsed_seconds"])

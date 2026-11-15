@@ -66,7 +66,6 @@ PrestaShop 为 19/32，12306 为 31/49，Ctrip 为 32/50。后三项尚未真实
 | --- | --- | --- | --- |
 | Keep v6-auto | 225.7 秒，应用阶段 148.5 秒 | 11/11 | 11/11 |
 | BookStack Lite v3-auto 首轮 | 369.6 秒，应用阶段 330.1 秒 | 12/12 | 10/12 |
-| BookStack Lite 恢复修复 | 153.4 秒，3 次模型请求 | 12/12 | 12/12 |
 | StackOverflow 首轮 | 总时限 900 秒，TIME_LIMIT | 27 例编译完成，应用未完成验收 | 尚无外部套件 |
 | StackOverflow status-v3 修复后检查 | 修复运行 TIME_LIMIT，检查独立执行 | 20 通过、1 失败、6 未执行 | 尚无外部套件 |
 
@@ -203,3 +202,10 @@ Git 标签采用 react-v0.1.0a1。用户指定送测 ZIP 使用 用途 YYYYMMDD 
 output/release-0.1.0a1-framework-tests.log 与 output/release-0.1.0a1-package-tests.log。
 实际发布 ZIP、SHA256、清单和导出入口核对结果写入
 output/releases/react-0.1.0a1-validation.json。平台 Linux/Chromium 实测待补充。
+
+
+## 用户修正后的验证约定与平台失败
+
+用户明确要求修复 Agent 框架，并要求以从零生成的应用验证效果。此前把暴露外部测试后的旧应用恢复修复结果放入框架成效表，口径不当，已撤下该行。相关过程保留为诊断记录。
+
+本次平台 run 为 7557958c3fd3，BookStack Lite，输入语义指纹与先前输入一致。平台运行约 5 分 42 秒，应用内验收报告 12/12，用户提供的外部结果 6/12。生成包位于 D:/download/se/7557958c3fd3-template.zip，解压及复现记录位于当前 output/bookstack-platform-20261115。源码显示 Edit 和 New Page 使用链接，外部用例要求 button，正进行原包本地复现。生成应用源码仅用于只读诊断，后续修复落实到框架，从原始需求重新生成验证。

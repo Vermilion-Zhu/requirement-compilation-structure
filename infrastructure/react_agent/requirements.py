@@ -118,6 +118,10 @@ def compile_requirements(directory: Path) -> tuple[dict, dict]:
                       for record in materials["files"]],
         "warnings": [*materials["warnings"], *({"generated_id": rid} for rid in tree.generated_ids)],
         "website_defaults": {
+            "workflow_controls": "When the original role is unspecified, workflow actions use native buttons, "
+                "including controls opening creation forms or editors even when the URL changes. "
+                "Keep navigation and record destination links as links. "
+                "Explicit roles and allowed alternatives in the original requirements take precedence.",
             "feedback_names": "When a requirement identifies status/alert feedback by a specific message, "
                 "default its accessible name to that message. Exclude child action captions. "
                 "Explicit requirements for another name or an unnamed element take precedence.",
