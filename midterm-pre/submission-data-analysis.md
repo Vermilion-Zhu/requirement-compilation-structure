@@ -332,7 +332,7 @@ tokens **2.459M**、task score 58.73。对比 Breadcrumb（72.7%、1h19m、2.339
 
 ![正确率 vs 运行时间](charts/tests_vs_runtime.png)
 
-- 左上 BookStack Web：07a 在右上（100%、13m），Bounded 在左（77%、26m）；
+- 左上 BookStack Web：07a 在左上（100%、13m），Bounded 在右（77%、26m）；
 - 右上 BookStack Lite：Light/05b 在 100% 且 10–11m；Semantics 91.7% 但 1h23m；
 - 左下 Keep Web：只有 Bounded（100%、25m）；
 - 右下 Keep Lite：05b 在左上（100%、6m32s）；Hooks 在下方（9.1%）；M8-M10 在右侧（63.6%、2h4m）。
