@@ -1,6 +1,6 @@
 [project]
 name = "requirement-compilation-structure"
-version = "0.1.0"
+version = "0.1.0a3"
 description = "Compile a requirement tree into a database, backend APIs, and an interactive frontend"
 readme = "README.md"
 requires-python = ">=3.11"

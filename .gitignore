@@ -9,6 +9,7 @@ docs/
 !/scripts/package.py
 !/scripts/analyze_log.py
 !/scripts/preflight.py
+!/scripts/evaluate_react.py
 
 AGENTS.md
 .vscode/

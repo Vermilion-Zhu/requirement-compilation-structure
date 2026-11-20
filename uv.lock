@@ -710,7 +710,7 @@ wheels = [
 
 [[package]]
 name = "requirement-compilation-structure"
-version = "0.1.0"
+version = "0.1.0a3"
 source = { virtual = "." }
 dependencies = [
     { name = "httpx" },
