@@ -1,312 +1,401 @@
 # 提交数据与版本分析（中期报告用）
 
-> 数据源：`output/ArcBench_web_scores.html`（Web 全量任务，History 11 条）与
-> `output/ArcBench_lite_scores.html`（Lite 任务，History 18 条），以及 `output/*.zip`。
-> 解析脚本：`midterm-pre/analyze_submissions.py`；样图脚本：`midterm-pre/draw_score_chart.py`。
+> 数据源：
+> - `output/web_score_details.txt`、`output/lite_score_detail.txt`（手动粘贴的提交详情，21 条非零提交、6 个任务）；
+> - `output/ArcBench_web_scores.html`、`output/ArcBench_lite_scores.html`（提交历史与总分）；
+> - `output/*.zip`（18 个已提交包）与包内 `agent-release.json`。
 >
-> 先说结论：**保存的 HTML 只有"提交名 + 时间 + 总分"，没有每任务 Tests%、Runtime、Tokens**。
-> 详情抽屉在 HTML 里是空的，详情接口需要登录 Cookie（未登录返回 401）。因此本文件先完成
-> 可确定的部分（版本映射、分数/趋势、M8-M10 复盘、样图），并列出补数清单；拿到详情导出后
-> 可以直接换掉样图的 X 轴。
+> 解析/画图：`midterm-pre/parse_details.py`、`midterm-pre/analyze_submissions.py`、
+> `midterm-pre/draw_task_charts.py`。
+>
+> 核心结论：**总分不能直接比较**——它受"这次跑了几个任务"影响很大；有意义的是**同一竞赛、同一任务**的
+> Tests%（通过率）与 Runtime/Tokens 的对比。
 
 ---
 
-## 1. 口径与数据限制
+## 0. 核心发现
 
-### 1.1 已拿到的数据
+1. **总分被任务覆盖稀释**：Web 的 Bounded 跑满 6 个任务，总分 89.59；后续 Web 提交大多只跑 BookStack
+   一个任务，即使 BookStack Tests% 到 100%，总分也只有 5–9。因此 PPT 必须**分 Web/Lite、逐任务**讲。
+2. **BookStack 是唯一同时有 Web 和 Lite 长历史的样本**：
+   - Web：77.1% → 100%（07a，13m6s，1.081M tokens，task score 130.10）；
+   - Lite：16.7% → 91.7%（Semantics）→ 100%（Breadcrumb / Light / 05b），
+     Light 用 9m56s、0.568M tokens 达到 100%。
+3. **Keep 的 Lite 历史完整**：UI Naming 90.9% → Hooks 9.1% → IR/GYP/Breadcrumb 72.7% →
+   **M8-M10 63.6%（7/11）** → 05b **100% / 6m32s / 0.204M**。
+4. **M8-M10 是明确的负向点**：Keep 只跑一个任务，Tests% 63.6%、2h4m、2.459M，比 Breadcrumb 更慢更低；
+   根因是 REQ-2.4 设计 502 空覆盖 + 导航名 "Sidebar navigation" 回归（见 §6）。
+5. **资源效率最佳点**：
+   - BookStack Web：07a（100%、13m6s、1.081M、130.10）；
+   - BookStack Lite：Light（100%、9m56s、0.568M、125.80）；
+   - Keep：05b（100%、6m32s、0.204M、127.41）；
+   - 05b 的 BookStack 也保持 100%，但比 Light 多约 1 分钟/0.47M tokens。
+6. **其他任务历史很稀疏**：StackOverflow 只有 Bounded（Web）和 Breadcrumb（Lite）两个点；
+   12306 只有 Bounded + Nowic×2；Ctrip/PrestaShop 只有 Bounded 的 Web 全量运行。
+   这些任务暂时无法画"版本迭代趋势"，只能作为单点参考。
 
-- 两次竞赛的提交历史：提交名、提交时间、总分（`<strong>` 里的 Score）。
-- 本地 `output/` 下的 18 个 ZIP：名称、时间、包内 `agent-release.json` 的版本/引擎/commit。
-- 本地运行产物：`output/M8-M10_keep/` 等（用于复盘，不是平台 Runtime）。
+---
 
-### 1.2 没拿到的数据
+## 1. 口径与数据说明
 
-| 字段 | 状态 | 原因 |
+### 1.1 平台输出字段
+
+每个提交（Detail 页）现在能拿到：
+
+- 总分、Test pass rate（通过数/总数）、Model cost、Total runtime、Tokens；
+- 6 个任务各自：是否运行（Open run / Not run）、Task score、Tests%、Features%、Runtime、Tokens、Cost。
+
+Web 总测试数 **515**；Lite 总测试数 **182**。`Not run` 的任务按 0 分计；没有出现在 Detail 里的任务同样视为未跑。
+
+### 1.2 总分的解释
+
+- 平台分数综合通过率、token 消耗和时间消耗；**单任务耗时/token 特别少时，task score 可以超过 100**
+  （例：07a BookStack 130.10、05b Keep 127.41）。
+- 总分按提交实际运行的任务汇总；只跑 1–2 个任务时，分母仍是 515/182，所以总分明显低。
+- 因此：
+  - **不要**用总分比较"只跑 BookStack"和"跑满 6 个任务"的提交；
+  - 正确做法是**固定竞赛 + 固定任务**，比较 Tests% 和 Runtime/Tokens。
+
+### 1.3 版本与未知项
+
+- 18 个 ZIP 与平台提交名可对应；同名 ZIP 可能同时提交到 Web 和 Lite（如 Light、05b）。
+- 早期提交的 ZIP 不在 `output/`（`compiler.zip` / `baseline.zip` 或组员直接发的包），
+  版本列写"未知"，但分数/运行数据保留。
+- 0 分提交（Web：07d、Light 的 Web 运行、zmr×2；Lite：Fix E2E、D1、E2E Re-fixed、Nowic 11-07）按用户要求排除；
+  它们没有 Detail 数据。
+
+**版本映射（非零提交）**
+
+| ZIP / 版本 | 平台发布版本 | 提交（竞赛/总分） |
 | --- | --- | --- |
-| 每任务 Tests%（通过的外部测试占比） | 缺失 | 需要点开每条提交的 Details；保存的 HTML 中详情抽屉为空 |
-| Runtime | 缺失 | 同上；历史列表只有总分 |
-| Tokens | 缺失 | 同上 |
-| 每任务失败明细 | 缺失 | 同上；只有本地 `ArcBench.html` 能看单个任务 |
+| semantics.zip | —（staged） | Lite / 7.33 |
+| compiler-ui-naming-20261107.zip | —（staged） | Lite / 5.35 |
+| gyp.no1.zip | —（staged） | Lite / 4.10 |
+| compiler-hooks.zip | —（staged） | Lite / 0.34 |
+| ir_amended.zip | —（staged） | Lite / 5.25 |
+| readcrumb.zip | —（staged） | Lite / 13.35 |
+| ntry_route.zip（M8/M9/M10） | —（staged） | Lite / 3.55 |
+| Light 20261115 dzs.zip | 0.1.0a2 | Lite / 8.29（Web 0 排除） |
+| Lite Bounded Runtime 20261115 dzs.zip | 0.1.0a4 | Web / 89.59 |
+| Lite 05b Log Preview 20261116 dzs.zip | 0.1.0a5.post1 | Lite / 15.67；Web / 5.80 |
+| Lite Workflow Groups 20261118 dzs.zip | 0.1.0a6 | Web / 6.09 |
+| Lite History Search 20261119 dzs.zip | 0.1.0a6.post1 | Web / 5.83 |
+| Lite 05c Log Labels 20261119 dzs.zip | 0.1.0a5.post2 | Web / 7.14 |
+| Lite 07a Input Hints 20261120 dzs.zip | 0.1.0a7 | Web / 8.84 |
+| Lite 07b Input Hints and Obligations 20261120 dzs.zip | 0.1.0a7.post1 | Web / 7.20 |
+| Lite 07d Scenario Coverage 20261120 dzs.zip | 0.1.0a7.post3 | Web / 0（排除） |
 
-证据：
+> 版本号顺序与提交顺序不完全一致（例如 05c 是 a5.post2、History 是 a6.post1）；上表按提交时间叙述，
+> 版本号只用于核对包。
 
-- `ArcBench_*_scores.html` 末尾的 `<div class="ant-drawer-body"></div>` 是空的；
-- 历史接口 `GET /api/competitions/{competition}/submissions` 未登录返回 **401**；
-- 页面 JS 中详情是点击后异步加载的，静态保存不会带数据。
+### 1.4 注意：Overall Runtime ≠ 各任务 Runtime 之和
 
-### 1.3 分数口径
-
-- 这里的"分数"是平台**总分**，不等于 Tests%。Tests% 是每任务通过的外部测试占比，需要 Details。
-- 不同轮次的任务集、需求数、外部测试数、模型配置都可能变化，**不能把不同竞赛/不同版本的分数直接横比**。
-- 按用户要求：**0 分提交视为出错/主动停止，排除**；版本未知的提交保留数据、版本留空。
-
----
-
-## 2. 提交清单（按时间升序）
-
-### 2.1 Web 全量任务（11 条，排除 4 条 0 分）
-
-| 日期 | 提交 | 总分 | 版本（ZIP → 发布版本） | 处理 |
-| --- | --- | ---: | --- | --- |
-| 11-03 | zmr20245036@sjtu.edu.cn | 0.00 | — | 排除 |
-| 11-03 | zmr20245036@sjtu.edu.cn | 0.00 | — | 排除 |
-| 11-15 | Light 20261115 dzs | 0.00 | `Light 20261115 dzs` → 0.1.0a2 | 排除（同包在 Lite 为 8.29） |
-| 11-15 | Lite Bounded 20261115 dzs | **89.59** | `Lite Bounded Runtime 20261115 dzs` → 0.1.0a4 | 保留；异常高值，见 §4.2 |
-| 11-17 | Lite 05b Log Preview 20261116 dzs | 5.80 | `Lite 05b Log Preview 20261116 dzs` → 0.1.0a5.post1 | 保留（同包在 Lite 为 15.67） |
-| 11-18 | Lite Workflow Groups 20261118 dzs | 6.09 | `Lite Workflow Groups 20261118 dzs` → 0.1.0a6 | 保留 |
-| 11-19 | Lite History Search 20261119 dzs | 5.83 | `Lite History Search 20261119 dzs` → 0.1.0a6.post1 | 保留 |
-| 11-19 | Lite 05c Log Labels 20261119 dzs | 7.14 | `Lite 05c Log Labels 20261119 dzs` → 0.1.0a5.post2 | 保留 |
-| 11-20 | Lite 07a Input Hints 20261120 dzs | **8.84** | `Lite 07a Input Hints 20261120 dzs` → 0.1.0a7 | 保留；Bounded 之外最高 |
-| 11-20 | Lite 07b Input Hints and Obligations 20261120 dzs | 7.20 | `Lite 07b Input Hints and Obligations 20261120 dzs` → 0.1.0a7.post1 | 保留 |
-| 11-20 | Lite 07d Scenario Coverage 20261120 dzs.zip | 0.00 | `Lite 07d Scenario Coverage 20261120 dzs.zip` → 0.1.0a7.post3 | 排除（最新一条 0 分，疑似出错/停止） |
-
-### 2.2 Lite 任务（18 条，排除 4 条 0 分）
-
-| 日期 | 提交 | 总分 | 版本（ZIP → 发布版本） | 处理 |
-| --- | --- | ---: | --- | --- |
-| 11-04 | First Deployable Agent | 0.74 | —（版本未知） | 保留 |
-| 11-04 | Full-hooked and E2E Enhanced | 1.25 | —（版本未知） | 保留 |
-| 11-05 | Fix E2E Reuse | 0.00 | —（版本未知） | 排除 |
-| 11-05 | D1 Implementation | 0.00 | `compiler_d1` | 排除 |
-| 11-05 | E2E Re-fixed | 0.00 | `compiler_e2e_refix` | 排除 |
-| 11-05 | Nowicthelight | 1.68 | —（版本未知） | 保留 |
-| 11-05 | Nowicthelight | 1.38 | —（版本未知） | 保留 |
-| 11-05 | Baseline Test | 0.74 | —（版本未知） | 保留 |
-| 11-05 | Semantics Enhanced | **7.33** | `semantics` | 保留；语义 IR 后的跃升 |
-| 11-07 | UI Naming 20261107 | 5.35 | `compiler-ui-naming-20261107` | 保留 |
-| 11-07 | Nowicthelight | 0.00 | —（版本未知） | 排除 |
-| 11-07 | GYP No.1 | 4.10 | `gyp.no1` | 保留 |
-| 11-07 | Full-hooked 20261107 dzs | 0.34 | `compiler-hooks` | 保留（明显回退） |
-| 11-09 | IR amended 20261109 zmr | 5.25 | `ir_amended` | 保留 |
-| 11-11 | Breadcrumb-fixed 20261111 zmr | **13.35** | `breadcrumb` | 保留；staged 峰值 |
-| 11-13 | Entry Route and Probes 20261113 zmr | 3.55 | `entry_route`（M8/M9/M10） | 保留；较 Breadcrumb -9.80 |
-| 11-15 | Light 20261115 dzs | 8.29 | `Light 20261115 dzs` → 0.1.0a2 | 保留；Lite 引擎首条 |
-| 11-17 | Lite Log Preview 20261116 dzs | **15.67** | `Lite 05b Log Preview 20261116 dzs` → 0.1.0a5.post1 | 保留；Lite 峰值（当前 leaderboard） |
-
-> "版本未知"的提交保留了分数/时间，但 ZIP 不在 `output/` 中（可能是组员直接发 ZIP、尚未推到远端）。
-> 其中 `First Deployable Agent` / `Full-hooked and E2E Enhanced` / `Nowicthelight` / `Baseline Test`
-> 可以按时间推断属于 staged 阶段，但没有可核对的包，标注为"版本未知"。
+- 例：Semantics Enhanced 的 overall Runtime 776m51s，但唯一运行的 BookStack 任务只有 83m58s；
+  说明 overall runtime 可能包含失败重试/额外探索，而 task 结果只记录最终有效运行。
+- 因此**图和表统一使用 per-task Runtime / Tokens**；overall 只用于总览。
 
 ---
 
-## 3. 版本映射（ZIP → 发布版本 → 提交）
+## 2. 提交总览（Detail 可解析的 21 条）
 
-| ZIP | 发布版本 | 引擎 | 平台提交（竞赛/分数） |
-| --- | --- | --- | --- |
-| `compiler_d1.zip` | — | staged | Lite / 0.00（排除） |
-| `compiler_e2e_refix.zip` | — | staged | Lite / 0.00（排除） |
-| `semantics.zip` | — | staged | Lite / 7.33 |
-| `compiler-ui-naming-20261107.zip` | — | staged | Lite / 5.35 |
-| `gyp.no1.zip` | — | staged | Lite / 4.10 |
-| `compiler-hooks.zip` | — | staged | Lite / 0.34 |
-| `ir_amended.zip` | — | staged | Lite / 5.25 |
-| `breadcrumb.zip` | — | staged | Lite / 13.35 |
-| `entry_route.zip` | — | staged（M8/M9/M10） | Lite / 3.55 |
-| `Light 20261115 dzs.zip` | 0.1.0a2 | Lite | Lite / 8.29；Web / 0.00（排除） |
-| `Lite Bounded Runtime 20261115 dzs.zip` | 0.1.0a4 | Lite | Web / 89.59 |
-| `Lite 05b Log Preview 20261116 dzs.zip` | 0.1.0a5.post1 | Lite | Lite / 15.67；Web / 5.80 |
-| `Lite Workflow Groups 20261118 dzs.zip` | 0.1.0a6 | Lite | Web / 6.09 |
-| `Lite History Search 20261119 dzs.zip` | 0.1.0a6.post1 | Lite | Web / 5.83 |
-| `Lite 05c Log Labels 20261119 dzs.zip` | 0.1.0a5.post2 | Lite | Web / 7.14 |
-| `Lite 07a Input Hints 20261120 dzs.zip` | 0.1.0a7 | Lite | Web / 8.84 |
-| `Lite 07b Input Hints and Obligations 20261120 dzs.zip` | 0.1.0a7.post1 | Lite | Web / 7.20 |
-| `Lite 07d Scenario Coverage 20261120 dzs.zip` | 0.1.0a7.post3 | Lite | Web / 0.00（排除） |
+### 2.1 Web 全量任务（7 条非零；另有 4 条 0 分未列入）
 
-注意：
+| 日期 | 版本 | 总分 | Tests（通过/总数） | Total runtime | Tokens | 跑的任务 |
+| --- | --- | ---: | --- | ---: | ---: | ---: |
+| 11-15 | Bounded（0.1.0a4） | **89.59** | 74.8% · 385/515 | 600m 13s | 212.552M | 6/6 |
+| 11-17 | 05b（0.1.0a5.post1） | 5.80 | 4.7% · 24/515 | 17m 2s | 1.330M | 1/6 |
+| 11-18 | Workflow（0.1.0a6） | 6.09 | 5.2% · 27/515 | 27m 31s | 3.526M | 1/6 |
+| 11-19 | History（0.1.0a6.post1） | 5.83 | 5.6% · 29/515 | 66m 31s | 3.841M | 1/6 |
+| 11-19 | 05c（0.1.0a5.post2） | 7.14 | 5.6% · 29/515 | 33m 32s | 1.637M | 1/6 |
+| 11-20 | 07a（0.1.0a7） | **8.84** | 6.8% · 35/515 | 13m 6s | 1.081M | 1/6 |
+| 11-20 | 07b（0.1.0a7.post1） | 7.20 | 5.6% · 29/515 | 19m 3s | 2.304M | 1/6 |
 
-- 发布版本顺序不是提交顺序：`05c` 是 0.1.0a5.post2，晚于 `05b` 的 a5.post1，但早于 `Workflow` 的 a6；
-  `History` 是 a6.post1；`07a/07b/07d` 是 a7 系列。表中按**提交时间**排序，版本号只作辅助。
-- `Light` 与 `05b` 是同一个 ZIP 分别提交到两个竞赛，所以各有两个分数；`Light` 在 Web 为 0，按规则排除，
-  但 Lite 的 8.29 保留。
+- Bounded 是唯一跑满 6 个任务的 Web 提交，总分高是"覆盖 + 综合"的结果，不是单任务正确率最高。
+- 07a 的 BookStack 已经 100%，但总分只有 8.84，因为只跑了 1/6 个任务。
 
----
+### 2.2 Lite 任务（14 条非零）
 
-## 4. 分数分析
+| 日期 | 版本 | 总分 | Tests（通过/总数） | Total runtime | Tokens | 跑的任务 |
+| --- | --- | ---: | --- | ---: | ---: | ---: |
+| 11-04 | First（未知） | 0.74 | 1.1% · 2/182 | 79m 57s | 3.503M | 1/6 |
+| 11-04 | Hooks+E2E（未知） | 1.25 | 1.6% · 3/182 | 179m 45s | 2.655M | 1/6 |
+| 11-05 | Nowic（未知） | 1.68 | 3.3% · 6/182 | 837m 23s | 56.522M | 1/6 |
+| 11-05 | Nowic（未知） | 1.38 | 2.7% · 5/182 | 825m 3s | 53.480M | 1/6 |
+| 11-05 | Baseline（未知） | 0.74 | 1.1% · 2/182 | 90m 23s | 3.632M | 1/6 |
+| 11-05 | Semantics | 7.33 | 10.4% · 19/182 | 776m 51s | 30.717M | 1/6 |
+| 11-07 | UI Naming | 5.35 | 5.5% · 10/182 | 60m 42s | 2.324M | 1/6 |
+| 11-07 | GYP | 4.10 | 4.4% · 8/182 | 62m 50s | 2.764M | 1/6 |
+| 11-07 | Hooks | 0.34 | 0.5% · 1/182 | 55m 33s | 2.314M | 1/6 |
+| 11-09 | IR | 5.25 | 6.0% · 11/182 | 118m 33s | 5.023M | 2/6 |
+| 11-11 | Breadcrumb | **13.35** | 15.9% · 29/182 | 468m 57s | 18.828M | 3/6 |
+| 11-13 | M8-M10（entry_route） | 3.55 | 3.8% · 7/182 | 124m 5s | 2.459M | 1/6 |
+| 11-15 | Light（0.1.0a2） | 8.29 | 6.6% · 12/182 | 9m 56s | 0.568M | 1/6 |
+| 11-17 | 05b（0.1.0a5.post1） | **15.67** | 12.6% · 23/182 | 17m 36s | 1.246M | 2/6 |
 
-### 4.1 保留样本（21 条）
-
-- Web 7 条：Bounded 89.59、07a 8.84、07b 7.20、05c 7.14、Workflow 6.09、History 5.83、05b 5.80。
-- Lite 14 条：05b 15.67、Breadcrumb 13.35、Light 8.29、Semantics 7.33、UI Naming 5.35、IR 5.25、
-  GYP 4.10、Entry Route 3.55、Nowic 1.68/1.38、Hooks+E2E 1.25、First 0.74、Baseline 0.74、Hooks 0.34。
-
-### 4.2 Web：Bounded 89.59 是异常点
-
-- Bounded（0.1.0a4）比同竞赛第二名 07a（8.84）高 **80.75**，比后续 6 条（5.80–8.84）高一个数量级。
-- 有两种可能，当前 HTML 无法区分：
-  1. 当期 Web 任务集/评分权重与后续不同（任务数、需求数、外部测试数发生变化）；
-  2. 后续 Lite 版本在 Web 全量任务上确实出现了大幅回退。
-- **不要**把 89.59 当作"稳定水平"画进趋势线；建议在图中单独标注为异常点，并在拿到 Tests%/Runtime 后再判断。
-- Bounded 之后，Lite 系列在 Web 上的分数为：5.80 → 6.09 → 5.83 → 7.14 → **8.84** → 7.20（07d 0 排除）。
-  整体是小幅上升后回落的平台期，尚未回到 Bounded 的分数。
-
-### 4.3 Lite：两条线，峰值在 05b
-
-**staged 阶段（11-04 ~ 11-13）**：
-
-```
-0.74 → 1.25 → 1.68 → 1.38 → 0.74 → 7.33 → 5.35 → 4.10 → 0.34 → 5.25 → 13.35 → 3.55
-        First  Hooks+E2E Nowic  Nowic  Baseline Semantics UI Naming GYP Hooks IR Breadcrumb EntryRoute
-```
-
-- **+6.59（Semantics）**：语义 IR/可访问名进入设计后，分数第一次上到 7 分档；
-- **+8.10（Breadcrumb）**：导航守卫 + 回归重放后到 13.35，是 staged 的最好成绩；
-- **-9.80（Entry Route/M8-M10）**：M8/M9/M10 这一轮明显回退；Keep 的 4 条外部超时已复盘（§5），
-  Web/Lite 的总分回退与它同源（入口/地标/覆盖率的语义回归）；
-- 中间 `Hooks 0.34` 是一次明显异常/回退，值得单独对照 ZIP 内容，但当前缺少每任务明细。
-
-**Lite 阶段（11-15 ~ 11-17）**：
-
-- Light 8.29（a2）→ 05b **15.67**（a5.post1），比 staged 峰值 13.35 高 **2.32**；
-- 05b 同时是当前 Lite 的 leaderboard 提交（页面选中项）。
-
-### 4.4 关键变化（可用于报告叙事）
-
-| 变化 | 数值 | 解释 |
-| --- | ---: | --- |
-| First → Semantics | +6.59 | 语义 IR / 可访问名第一次系统性进入设计 |
-| IR → Breadcrumb | +8.10 | 导航守卫 + 回退重放，修复"两个 navigation"回归 |
-| Breadcrumb → Entry Route（M8/M9/M10） | **-9.80** | 入口/地标规则引入新回归；Keep 4 条超时 |
-| Light → 05b（Lite） | +7.38 | 轻量引擎 + 测试/运行时限制调整后的峰值 |
-| Bounded → 05b（Web） | -83.79 | Bounded 异常高值，不能直接解释为回退 |
-
-### 4.5 结论（在缺少 Tests% 的前提下）
-
-1. **总分能看出阶段趋势，但不能替代 Tests%**：Bounded 的 89.59 和 07d 的 0 都说明总分会受任务集/异常影响。
-2. **语义 IR/壳/导航守卫是有效的**：staged 从 0.74 到 13.35，主要跃升发生在这些改动之后。
-3. **M8/M9/M10 这一轮是负向的**：Lite 总分 -9.80，Keep 外部 7/11；根因可定位（§5），不是"规则没用"，
-   而是实现/兜底没接住（502 空设计 + 导航命名 + 未跑预检）。
-4. **Lite 引擎有潜力**：05b 到 15.67（Lite 历史最高），但 Web 侧 Bounded 之后仍在 5–9 平台期，
-   需要 Tests%/Runtime 才能判断是"正确率不足"还是"任务集变化"。
+- 早期 staged 提交基本只跑一个任务；Breadcrumb 是 staged 中唯一跑 3 个任务的（BookStack/Keep/StackOverflow）。
+- Light 只跑 BookStack，总分 8.29；05b 跑 BookStack+Keep，总分 15.67——总分差异主要来自覆盖，不是单任务退化。
 
 ---
 
-## 5. 运行复盘：M8-M10 Keep（外部 7/11）
+## 3. 任务覆盖矩阵
 
-产物：`output/M8-M10_keep/template/`；任务：Keep（6 需求 / 11 外部用例）；
-结果：**7/11**，4 条失败全部是超时——REQ-1.1 一条、REQ-2.4 三条。
+| 任务 | Web 运行过的提交 | Lite 运行过的提交 |
+| --- | --- | --- |
+| BookStack | Bounded, 05b, Workflow, History, 05c, 07a, 07b（7） | First, Hooks+E2E, Baseline, Semantics, IR, Breadcrumb, Light, 05b（8） |
+| Keep | Bounded（1） | UI Naming, GYP, Hooks, IR, Breadcrumb, M8-M10, 05b（7） |
+| StackOverflow | Bounded（1） | Breadcrumb（1） |
+| 12306 | Bounded（1） | Nowic ×2（2） |
+| Ctrip | Bounded（1） | — |
+| PrestaShop | Bounded（1） | — |
 
-### 5.1 失败映射
+**结论**：
 
-| 需求 | 外部用例 | 现象 | 直接原因 |
-| --- | --- | --- | --- |
-| REQ-1.1 | 打开 workspace / 检查 Sidebar、Notes、Archived、Toggle | 超时 | 应用导航可访问名是 **"Sidebar navigation"**，外部按 `"Sidebar"` 找 |
-| REQ-2.4 | Archive note / Undo / Unarchive（3 条） | 超时 | 设计里 **REQ-2.4 没有任何元素**；Archive/Undo/Unarchive/status 都不存在 |
+- 只有 **BookStack** 和 **Keep** 有足够的逐任务历史（≥7 个点）；
+- StackOverflow、12306 只有 1–2 个点，只能作为单点参考；
+- Ctrip/PrestaShop 只有 Bounded 的全量运行，无法谈"版本趋势"；
+- 这也是为什么"总分趋势"会误导：大部分提交只覆盖 1 个任务。
 
-### 5.2 根因 A：REQ-2.4 的设计调用 502，任务被跳过
+---
 
-日志（`output/M8-M10_keep/template/compiler.log`）：
+## 4. 逐任务对比
 
-- L33036：REQ-2.4 的 UI 设计模型调用 `ef4bd769`；
-- L33043–33049：`MODEL FAILED`，`Round-trip latency: 541.41 s`，
-  `InternalServerError: 502 ... Upstream connection, response size or timeout error`；
-- L33052：`09_design_ui / REQ-2.4 | FAILED; continuing`；
-- `compilation.json`：`09_design_ui = COMPLETED_WITH_FAILURES`，`12_implement_frontend_tdd = COMPLETED_WITH_FAILURES`；
-- `.arc/ui_design.json`：`REQ-2.4 -> []`，三个 REQ-2.4 步骤也全部为 `[]`；
-- `.arc/frontend_e2e.json`：`REQ-2.4 = NO_TRIGGERS`，summary 只有 5 个 requirement。
+### 4.1 BookStack
 
-**关键机制**：
+**Web（全量任务）**
 
-1. `propose_json` 只对"响应读不懂/校验失败"做修复重试，**不对 502/超时等传输错误重试**；一次 502 就把
-   该需求标成 FAILED；
-2. `TaskFailures.finish()` 在阶段末尾发现失败会 `raise StageIncomplete`，而 `synthesize_ui` 的
-   `repair_semantics`、最终 `normalize_design`、语义告警打印都在 `finish()` **之后**——所以这一轮
-   **没有跑语义修复**；
-3. 阶段 11 没有为 REQ-2.4 生成 trigger，阶段 12 也就没有实现归档/撤销/取消归档，外部 3 条只能等到超时。
+| 日期 | 版本 | Tests% | Task score | Runtime | Tokens |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 11-15 | Bounded | 77.1 | 95.57 | 26m 17s | 2.108M |
+| 11-17 | 05b | 68.6 | 85.37 | 17m 2s | 1.330M |
+| 11-18 | Workflow | 77.1 | 89.60 | 27m 31s | 3.526M |
+| 11-19 | History | 82.9 | 85.74 | 1h 6m | 3.841M |
+| 11-19 | 05c | 82.9 | 105.01 | 33m 32s | 1.637M |
+| **11-20** | **07a** | **100.0** | **130.10** | **13m 6s** | **1.081M** |
+| 11-20 | 07b | 82.9 | 105.90 | 19m 3s | 2.304M |
 
-这不是"归档需求做不出来"，而是**一次模型侧 502 + 没有传输重试 + 失败后直接跳过**造成的空覆盖。
+- 07a 是 Web 的 Pareto 最优点：100% + 最短 runtime + 最低 tokens + 最高 task score；
+- 05c 与 07b 都是 82.9%：05c 用 33m/1.637M（时间多、token 少），07b 用 19m/2.304M
+  （时间少、token 多）；task score 接近（105.01 vs 105.90），是典型的资源权衡；
+- 05b 是 68.6%，是 Web 的低点；后续 05c/07a/07b 恢复到 82.9–100%。
 
-### 5.3 根因 B：导航命名回归（REQ-1.1）
+**Lite**
 
-- 需求原文是 "a visible **Sidebar navigation**"，外部 helper 期望
-  `getByRole('navigation', { name: 'Sidebar' })`；
-- 本轮设计把 `UI-app-sidebar.name` 写成了 **"Sidebar navigation"**（把 "navigation" 也并进了名字）；
-- 这是 M9 提示词"命名地标逐字保留 + 例子 Main navigation"的过度泛化：模型把 "X navigation"
-  整体当地标名，而外部契约要求名词部分是名字；
-- 如果 `repair_semantics` 跑了，M9 的契约校验会报：
-  `UI-app-sidebar: requirement names the navigation 'Sidebar' but this element is named 'Sidebar navigation'`；
-  但根因 A 让阶段在 `finish()` 处提前退出，修复没执行；
-- 同时，对产物跑 `semantic_issues` 还会报 `"Note archived"(role=status)` 缺失；`Undo` 因为模板容错
-  被误跳过（见 §5.5），需要在后续修复。
+| 日期 | 版本 | Tests% | Task score | Runtime | Tokens |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 11-04 | First（未知） | 16.7 | 11.20 | 1h 19m | 3.503M |
+| 11-05 | Hooks+E2E（未知） | 25.0 | 19.01 | 2h 59m | 2.655M |
+| 11-05 | Baseline（未知） | 16.7 | 11.30 | 1h 30m | 3.632M |
+| 11-05 | Semantics | **91.7** | 89.44 | 1h 23m | 2.786M |
+| 11-09 | IR | 25.0 | 19.15 | 59m 57s | 2.564M |
+| 11-11 | Breadcrumb | **100.0** | 100.14 | 1h 11m | 2.883M |
+| 11-15 | Light | **100.0** | **125.80** | **9m 56s** | **0.568M** |
+| 11-17 | 05b | **100.0** | 121.62 | 11m 4s | 1.042M |
 
-### 5.4 为什么外部是"超时"而不是断言失败
+- Semantics 第一次把 BookStack 从 16.7%/25% 推到 91.7%；
+- IR 回落到 25%，是一个需要单独检查的回归样本；
+- Breadcrumb 达到 100%，但 runtime 1h11m、tokens 2.883M；
+- Light 把同样 100% 压到 9m56s / 0.568M，task score 125.80；
+- 05b 同样 100%，但 11m4s / 1.042M，task score 121.62，略低于 Light。
 
-外部 helper 的定位顺序是"先等导航/区域/按钮出现，再操作"；缺少元素时 Playwright 的等待直接耗尽
-用例时限（10 s），所以报告显示 `Test timeout`，而不是"找不到元素"的断言错误。四条失败分别对应：
+**BookStack 结论**：
 
-- REQ-1.1：等 `navigation` "Sidebar" → 等不到；
-- REQ-2.4：等 note 的 Archive 按钮 / `Note archived` status / Undo → 等不到。
+- Web 最佳：07a（100%，13m，1.081M，130.10）；
+- Lite 最佳：Light（100%，9m56s，0.568M，125.80）；
+- 05b 与 Light 都是 100%，但 Light 更省资源；05b 的额外价值是同时跑了 Keep（见 4.2）。
 
-### 5.5 修复建议（按优先级）
+### 4.2 Keep
+
+**Web**：只有 Bounded：100%、124.10、25m25s、1.267M。
+
+**Lite**
+
+| 日期 | 版本 | Tests% | Task score | Runtime | Tokens |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 11-07 | UI Naming | 90.9 | 88.52 | 1h 0m | 2.324M |
+| 11-07 | GYP | 72.7 | 67.89 | 1h 2m | 2.764M |
+| 11-07 | Hooks | 9.1 | 5.63 | 55m 33s | 2.314M |
+| 11-09 | IR | 72.7 | 68.45 | 58m 36s | 2.459M |
+| 11-11 | Breadcrumb | 72.7 | 68.09 | 1h 19m | 2.339M |
+| 11-13 | M8-M10 | **63.6** | 58.73 | 2h 4m | 2.459M |
+| **11-17** | **05b** | **100.0** | **127.41** | **6m 32s** | **0.204M** |
+
+- UI Naming 已经到 90.9%，但 Hooks 掉到 9.1%（一次异常回退）；
+- IR/GYP/Breadcrumb 在 72.7% 平台期；
+- M8-M10 进一步降到 63.6%，且 runtime 2h4m，是"更慢更差"的明确负向点；
+- 05b 用 6m32s、0.204M 达到 100%，task score 127.41，是 Keep 的 Pareto 最优点。
+
+### 4.3 StackOverflow、12306、Ctrip、PrestaShop
+
+| 任务 | 竞赛 | 版本 | Tests% | Task score | Runtime | Tokens |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| StackOverflow | Web | Bounded | 88.1 | 105.86 | 1h 20m | 26.388M |
+| StackOverflow | Lite | Breadcrumb | 32.1 | 23.08 | 5h 17m | 13.606M |
+| 12306 | Web | Bounded | 59.2 | 71.10 | 1h 53m | 43.779M |
+| 12306 | Lite | Nowic（未知） | 12.2 | 6.25 | 13h 57m | 56.522M |
+| 12306 | Lite | Nowic（未知） | 10.2 | 5.14 | 13h 45m | 53.480M |
+| Ctrip | Web | Bounded | 78.3 | 91.29 | 4h 0m | 121.058M |
+| PrestaShop | Web | Bounded | 73.3 | 90.35 | 1h 53m | 17.953M |
+
+- StackOverflow 是 Web/Lite 差异最大的任务：Bounded 88.1%（但 26.4M tokens），Breadcrumb Lite 32.1%
+  （5h17m、13.6M）——Lite 需求更少，仍只过 32.1%，是后续重点。
+- 12306 的 Lite Nowic 跑了近 14 小时/56M tokens，仅 10–12%，是"高成本低正确率"的极端点。
+- Ctrip 4h/121M tokens 是资源消耗最大的单任务；PrestaShop 73.3%。
+
+---
+
+## 5. 正确率 vs 成本
+
+### 5.1 Pareto 最优点
+
+| 任务 | 最优点 | Tests% | Runtime | Tokens | Task score |
+| --- | --- | ---: | ---: | ---: | ---: |
+| BookStack（Web） | 07a | 100.0 | 13m 6s | 1.081M | 130.10 |
+| BookStack（Lite） | Light | 100.0 | 9m 56s | 0.568M | 125.80 |
+| Keep（Lite） | 05b | 100.0 | 6m 32s | 0.204M | 127.41 |
+| Keep（Web） | Bounded | 100.0 | 25m 25s | 1.267M | 124.10 |
+
+### 5.2 资源效率对比
+
+- **BookStack**：
+  - 07a vs Bounded：100% vs 77.1%，runtime 13m vs 26m，tokens 1.08M vs 2.11M——正确率和成本同时更优；
+  - 07a vs 05c：100% vs 82.9%，runtime 13m vs 33m，tokens 1.08M vs 1.64M；
+  - 07a vs 07b：100% vs 82.9%，runtime 13m vs 19m，tokens 1.08M vs 2.30M。
+- **Keep**：
+  - 05b vs UI Naming：100% vs 90.9%，runtime 6m32 vs 60m，tokens 0.204M vs 2.324M；
+  - 05b vs Breadcrumb：100% vs 72.7%，runtime 6m32 vs 1h19m，tokens 0.204M vs 2.339M；
+  - M8-M10：63.6%、2h4m、2.459M，正确率和成本都劣于前代。
+- **总分 vs task score**：
+  - 07a 的 task score 130.10，但总分 8.84（只跑 1/6）；
+  - Bounded 的 task score 95.57，总分 89.59（跑满 6/6）；
+  - 这再次说明不能用总分比较不同覆盖度的提交。
+
+### 5.3 结论
+
+1. 单任务看，**07a（BookStack Web）和 05b（Keep Lite）是当前最好的两个点**；
+2. Light 在 BookStack Lite 上资源最优，但只跑一个任务，总分不体现；
+3. M8-M10 是"正确率下降 + 成本上升"的双输点，必须复盘（§6）；
+4. StackOverflow/12306 是下一阶段的高成本风险点，尤其 12306 的 Lite Nowic（~14h、56M tokens、10–12%）。
+
+---
+
+## 6. M8-M10 Keep 复盘（外部 7/11）
+
+产物：`output/M8-M10_keep/template/`；平台 Detail：Keep 任务 **63.6%**（7/11）、runtime **2h4m**、
+tokens **2.459M**、task score 58.73。对比 Breadcrumb（72.7%、1h19m、2.339M）和 UI Naming
+（90.9%、1h0m、2.324M），M8-M10 同时更慢、更差。
+
+失败：REQ-1.1 一条 + REQ-2.4 三条，全部是超时。
+
+### 6.1 根因 A：REQ-2.4 设计调用 502，整条需求空覆盖
+
+- `compiler.log`：REQ-2.4 的 UI 设计调用 `ef4bd769` 在 **541.41 s** 后返回
+  `502 Upstream connection, response size or timeout error`；
+- 任务被标 `FAILED; continuing`，`ui_design.json` 中 `REQ-2.4 -> []`，三个步骤也为空；
+- `frontend_e2e.json`：`REQ-2.4 = NO_TRIGGERS`，summary 只有 5 个 requirement；
+- 阶段 09/12 均为 `COMPLETED_WITH_FAILURES`。
+
+机制：
+
+1. `propose_json` 只重试"响应读不懂/校验失败"，**不重试 502/超时**；
+2. `TaskFailures.finish()` 在阶段末尾 `raise StageIncomplete`，而 `repair_semantics`、最终 normalize
+   在它之后——本轮**没有跑语义修复**；
+3. 阶段 11 没有 REQ-2.4 的 trigger，阶段 12 不实现 Archive/Undo/Unarchive/status；
+   外部 helper 等不到元素，只能耗尽用例时限。
+
+### 6.2 根因 B：导航名 "Sidebar navigation" vs "Sidebar"
+
+- 需求写 "a visible Sidebar navigation"，外部期望 `getByRole('navigation', { name: 'Sidebar' })`；
+- 设计把名字写成 "Sidebar navigation"（M9 提示词"逐字保留 + Main navigation 例子"的过度泛化）；
+- 如果 `repair_semantics` 跑了，M9 契约检查会报 `UI-app-sidebar` 名字不符；
+  但根因 A 让阶段提前退出，修复没执行。
+- 额外 bug：`Undo` 因为存在别的 `{var}` 按钮，被模板容错误跳过（静态名不该被跳过）。
+
+### 6.3 修复建议
 
 | # | 修复 | 目的 |
 | --- | --- | --- |
-| 1 | `propose_json`/模型传输层对 502/503/504/timeout 重试 1–2 次（指数退避），再标 FAILED | 避免一次上游抖动造成整条需求空覆盖 |
-| 2 | `synthesize_ui` 在 `StageIncomplete` 时仍先执行 `repair_semantics`/最终 normalize/告警，再抛出 | 保证失败阶段也能修复已成功部分 |
-| 3 | 设计覆盖率门禁：leaf requirement 的 `elements` 为空 → 阶段失败/阻止提交（或触发定向重试） | 不允许"静默空需求"进入实现 |
-| 4 | M9 提示词补规则："`<X> navigation` 中 X 是名字；只有 Main/Primary/Global 等限定词才把 navigation 并入名字；不要在名字里重复 navigation" | 让 Sidebar 保持 "Sidebar"、Main 保持 "Main navigation" |
-| 5 | 模板容错收紧：静态名（如 `Undo`）不能因为存在别的 `{var}` 按钮就跳过 | 让 `Undo`/`Archive` 缺失被契约检查发现 |
-| 6 | 把 M10 preflight 接进提交前流程；quoted 控件缺失按需求关键度升级为 failure | 提交前拦住"导航名不符/控件缺失" |
-
-> 说明：以上是复盘建议，本轮没有改代码；M8-M10 的负向结果应作为"规则方向对、兜底不足"的案例，
-> 而不是否定语义 IR 本身。
+| 1 | 对 502/503/504/timeout 重试 1–2 次再标 FAILED | 避免一次上游抖动毁掉整条需求 |
+| 2 | `synthesize_ui` 在 `StageIncomplete` 时仍先跑 `repair_semantics`/finalize | 失败阶段也能修已成功部分 |
+| 3 | leaf requirement 的 elements 为空 → 阶段失败/阻止提交 | 不允许空需求进入实现 |
+| 4 | M9 提示词：`<X> navigation` 中 X 是名字；只有 Main/Primary 等限定词才并入 navigation | 保持 Sidebar vs Main navigation 的区分 |
+| 5 | 模板容错只跳过真正含 `{var}` 的名字；静态名必须检查 | 让 Undo/Archive 缺失被发现 |
+| 6 | M10 preflight 接入提交前流程，关键控件缺失升级为 failure | 提交前拦住导航/控件问题 |
 
 ---
 
-## 6. 图表：样图与最终图
+## 7. 图表（样图）
 
-### 6.1 样图（当前可画）
+> 数据：21 条非零提交、实际运行过的任务；所有点都画上，灰色 = 版本未知；X 取对数；
+> 箭头连接同一任务/竞赛的相邻提交。样图只标注关键版本，完整数据见上表；后续按视觉效果删点。
 
-![提交分数与版本迭代样图](charts/score_trend_sample.png)
+### 7.1 正确率 vs 运行时间
 
-- 左：Web 全量任务（0–100）；右：Lite 任务（0–16）。
-- 颜色：橙色 staged，青色 Lite，灰色版本未知；箭头连接相邻**保留**提交。
-- X 轴目前是"提交顺序"（因为 Runtime/Tokens 缺失），最终会替换为 Runtime 或 Tokens。
-- 零分提交已排除（8 条）；Bounded 89.59 标注为异常高值。
+![正确率 vs 运行时间](charts/tests_vs_runtime.png)
 
-### 6.2 最终图（拿到详情后）
+- 左上 BookStack Web：07a 在右上（100%、13m），Bounded 在左（77%、26m）；
+- 右上 BookStack Lite：Light/05b 在 100% 且 10–11m；Semantics 91.7% 但 1h23m；
+- 左下 Keep Web：只有 Bounded（100%、25m）；
+- 右下 Keep Lite：05b 在左上（100%、6m32s）；Hooks 在下方（9.1%）；M8-M10 在右侧（63.6%、2h4m）。
 
-目标：**正确率（Tests%）vs Runtime 或 Tokens**，每个点一个版本，箭头表示相邻版本。
+### 7.2 正确率 vs Token 消耗
 
-- Y：Tests%（每任务通过的外部测试占比；可先做每任务 facet，再做一个加权总分）。
-- X：Runtime（秒）或 Tokens（优先 Runtime；Tokens 作为第二张/次坐标）。
-- 点标签：版本短名（Breadcrumb / EntryRoute / 05b / 07a …）。
-- 箭头：按提交时间连接同一竞赛的相邻版本；跨竞赛不连。
-- 建议分面：Web / Lite 两个 panel，避免任务集差异。
-- 若 Runtime 跨度大，用 log x；同时标注零分/异常点（不连线）。
+![正确率 vs Token 消耗](charts/tests_vs_tokens.png)
 
-### 6.3 需要的字段（补数清单）
+- 07a（BookStack Web）1.081M tokens、100%；05b（Keep）0.204M tokens、100%；
+- M8-M10（Keep）2.459M tokens、63.6%；
+- 05b 的 BookStack 1.042M、100%，略高于 Light 的 0.568M。
 
-对每个 submission（至少保留的 21 条）：
+### 7.3 逐任务 Tests% 趋势（辅助）
 
-| 字段 | 层级 | 用途 |
-| --- | --- | --- |
-| Tests% | 每任务 | 正确率；画点、算加权 |
-| Runtime | 每任务/整轮 | X 轴 |
-| Tokens | 每任务/整轮 | 备选 X 轴或气泡大小 |
-| 失败用例 | 每任务 | 解释回退（如 07d=0） |
-| 任务集版本 | 每轮 | 标注不同任务数/测试数 |
+![逐任务 Tests% 趋势](charts/task_tests_trend.png)
 
-获取方式（任选其一）：
+- 适合讲"改进历史"：BookStack Web 77.1→68.6→77.1→82.9→82.9→100→82.9；
+  Keep Lite 90.9→72.7→9.1→72.7→72.7→63.6→100；
+- 注意 BookStack Lite 的 Semantics 91.7 与 IR 25 的波动，说明单点结果受实现/测试生成影响，不能只看相邻一两个点。
 
-1. 在网站逐条点 **Details**，把抽屉里的内容另存为 HTML/复制 JSON；
-2. 在登录状态打开 DevTools → Network，导出 `submissions`/submission 详情的响应 JSON；
-3. 如果平台支持导出 CSV，直接给 CSV。
+### 7.4 总分 vs 任务覆盖（辅助解释）
 
-> 在没有这些字段之前，任何"正确率 vs Runtime/Tokens"的图都只能示意，不能用于结论。
+![总分与任务覆盖](charts/overall_score_vs_coverage.png)
+
+- Bounded 跑满 6 个任务，总分 89.59；大部分提交只跑 1 个任务，总分 5–9；
+- 这张图用于解释"为什么总分不能直接比"，不作为正确率结论。
+
+### 7.5 最终 PPT 选图建议
+
+- 主图：`tests_vs_runtime.png`（或 `tests_vs_tokens.png` 二者选一；Runtime 更直观，Tokens 作为备份）；
+- 辅图：`task_tests_trend.png` 讲版本迭代；
+- 如果版面有限，只保留 BookStack 和 Keep 两个任务、Web/Lite 各一列，删掉单点面板（如 Keep Web）
+  与其他稀疏任务；这正是"最后按视觉效果删点"的方向。
 
 ---
 
-## 7. 复现
+## 8. 复现
 
 ```powershell
-# 1) 解析两个 HTML，打印 29 条提交与 ZIP/版本映射
+# 1) 提交历史 + ZIP 版本映射
 uv run python midterm-pre/analyze_submissions.py
 
-# 2) 生成样图（Pillow，无需 matplotlib）
-uv run python midterm-pre/draw_score_chart.py
-# -> midterm-pre/charts/score_trend_sample.png
+# 2) 解析 Detail 文本（21 条非零提交 + 6 任务）
+uv run python midterm-pre/parse_details.py
+
+# 3) 生成四张图
+uv run python midterm-pre/draw_task_charts.py
 ```
 
-解析注意：历史列表里 leaderboard 项是
-`<li class="competition-history-item is-selected">`，脚本按前缀 `<li class="competition-history-item`
-切分，否则会漏掉 Bounded/05b 两条 leaderboard 提交。
+注意：
+
+- `parse_details.py` 以"日期行"切分提交；任务段以 6 个固定任务名定位，`Not run` 不计入；
+- `ArcBench_*_scores.html` 的历史列表要按 `<li class="competition-history-item` 前缀切分，
+  否则会漏掉 leaderboard 的 `is-selected` 条目（Bounded/05b）；
+- 同一个 ZIP 可能提交到 Web 和 Lite，分数不可跨竞赛比较。
+
+---
+
+## 9. 数据风险与待确认
+
+1. **Detail 是手动粘贴的**：提交名/日期可能与历史页有细微差异（例如 Web 的 05b 与 Lite 的
+   "Lite Log Preview" 实际是同一个 ZIP），本文件按 ZIP/名称已做映射；
+2. **Overall Runtime 含重试**：Semantics 的 overall 776m 与单任务 84m 不一致；图表统一用 per-task；
+3. **未知版本**：`compiler.zip` / `baseline.zip` 不在 `output/`，版本列留空，但数据和点保留；
+4. **任务集可能变化**：Web 515 测试、Lite 182 测试；不同日期任务需求可能增删，跨大版本比较要谨慎；
+5. 若需要更精确的"正确率"定义（Tests% vs Features%），以 Tests% 为准；Features% 只作参考。
