@@ -56,8 +56,8 @@ class ReactSubmissionTests(unittest.TestCase):
         self.assertTrue(report["behavior_verified"])
         self.assertGreaterEqual(report["elapsed_seconds"], report["test_generation"]["elapsed_seconds"])
         self.assertTrue((Path(report["evidence"]) / "tests/acceptance-manifest.json").is_file())
-        self.assertEqual(json.loads((self.output / ".arc/react-submission.json").read_text()), report)
-        implementation = json.loads((self.output / ".arc/react-report.json").read_text())
+        self.assertEqual(json.loads((self.output / ".arc/react-submission.json").read_text(encoding="utf-8")), report)
+        implementation = json.loads((self.output / ".arc/react-report.json").read_text(encoding="utf-8"))
         self.assertTrue(implementation["acceptance_source_hashes"])
 
     def test_collection_failure_prevents_application_generation(self):
@@ -78,7 +78,7 @@ class ReactSubmissionTests(unittest.TestCase):
                 with self.assertRaises((ValueError, RuntimeError)):
                     self.compile()
                 self.implementation.generate.assert_not_called()
-                report = json.loads((self.output / ".arc/react-submission.json").read_text())
+                report = json.loads((self.output / ".arc/react-submission.json").read_text(encoding="utf-8"))
                 self.assertEqual(report["status"], "FAILED")
                 self.assertFalse(report["behavior_verified"])
 
@@ -189,7 +189,7 @@ class ReactSubmissionTests(unittest.TestCase):
                    return_value={"passed": False, "kind": "TEST_SUITE_ERROR"}):
             report = self.compile()
         self.assertEqual(report["test_generation"]["batches"], 2)
-        manifest = json.loads((Path(report["evidence"]) / "tests/acceptance-manifest.json").read_text())
+        manifest = json.loads((Path(report["evidence"]) / "tests/acceptance-manifest.json").read_text(encoding="utf-8"))
         self.assertEqual({case["requirement_id"] for case in manifest["cases"]}, {"R0", "R1", "R2"})
 
 
