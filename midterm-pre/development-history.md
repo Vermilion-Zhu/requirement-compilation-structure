@@ -160,20 +160,11 @@ StackOverflow 9/27，18 条失败全是 10 s 超时。本地构建产物探针�
 否则 button"；从需求文本抽取 `"X"(role=Y)`、定点 navigation、Follow-in-navigation 角色做校验；
 M10 进一步做了**提交前语义探针**（构建产物 + 真实浏览器 + requirement 契约）。
 
-#### 阶段 C 结果汇总
+#### 阶段 C 结果
 
-| 任务 / 轮次 | 外部结果 | 备注 |
-| --- | --- | --- |
-| BookStack 首版 | 3/12 | 首次可提交 |
-| BookStack（E2E 复用版） | 4/12 | 基础设施修复 |
-| BookStack（语义 IR + 壳） | 11/12 | 角色/地标生效 |
-| BookStack（导航守卫 + M1/M2） | **12/12** | 阶段性最好成绩 |
-| BookStack（M8/M9/M10 提交轮） | **7/11** | 较 12/12 回退；失败构成【待填：3 条失败用例与原因】 |
-| Keep（M4 之前） | 8/11 | `status`/`aria-pressed` 缺口 |
-| StackOverflow（M8/M9 之前） | 9/27 | 18 条 10 s 超时，主因入口/导航 |
-
-> 注意：这些外部套件的用例数（12/11/27）和版本不同，不能直接横向比较通过率；
-> 报告里建议画"每轮通过数/总数 + 版本说明"，不要只画百分比。
+外部测试的逐轮数字、失败构成和归因见 [提交数据分析](submission-data-analysis.md)。这里只保留历史结论：
+语义 IR/应用壳把 BookStack 从 3/12 推到 11/12，导航守卫后 12/12；M8/M9/M10 提交轮回退到 7/11，
+其中 Keep 的 4 条超时已定位到一次 502 导致的空设计与导航命名回归。
 
 ### 3.4 阶段 D：轻量 ReAct 架构实验（11-14 ~ 11-15）
 
@@ -209,19 +200,11 @@ runner、verification、tools、browser_tools、provenance）。
 入口：`main.py` 支持 `--engine staged|react`，默认从 `agent-release.json` 读取，否则 staged；
 打包器 `scripts/package.py --engine react` 生成 Lite 送测包。
 
-#### 结果（README/交接文档记录）
+#### 结果
 
-| 实验 | 总耗时 | 自动测试 | 外部测试 |
-| --- | --- | --- | --- |
-| Keep Lite | **225.7 s**（应用 148.5 s，8 循环） | 11/11 | 11/11 |
-| BookStack Lite 首轮 | **369.6 s**（应用 330.1 s，18 循环） | 12/12 | 10/12 |
-| BookStack 0.1.0a1 平台 | — | 12/12 | 6/12（原包本地复现 6/12） |
-| BookStack Lite 0.1.0a2 从零生成 | 约 574 s（含外部评估约 629 s） | 12/12 | **12/12** |
-| BookStack 完整版 0.1.0a3 从零生成 | 1191.2 s（19 循环） | 35/35 | 【待填：平台成绩】 |
-| StackOverflow Lite | 触及 900 s 总时限（TIME_LIMIT） | 27 例编译完成，应用未完成 | 尚无外部套件 |
-| StackOverflow 已有应用全量检查 | — | 21 通过 / 6 失败 / 0 跳过 | 需人工校准 |
-
-框架回归：Lite 分支 56 项通过；合并到 bookstack 后全量 **400 tests OK（53 skipped）**。
+Lite 与 staged 的耗时/通过率对照、平台提交分数和版本趋势，统一放在
+[提交数据分析](submission-data-analysis.md)；本节只保留架构层面的结论：
+单会话 ReAct 显著缩短了生成时间，但测试表达力和长任务预算仍需继续验证。
 
 #### 新暴露的问题
 
@@ -253,38 +236,14 @@ runner、verification、tools、browser_tools、provenance）。
 | 7 | 面包屑成了第二个导航地标 | 设计把页面级导航标成 navigation | 守卫：仅壳声明主导航 + 重复链接告警 | 回归修复 |
 | 8 | 依赖安装不可复现 | 浮动版本 + 失败信息丢失 | 锁 4.3.4 + npm 尾部 + 失败不重试 | 阶段 05 762 s 类问题消除 |
 | 9 | 入口页缺失/地标改名/导航角色错 | 设计没有应用级视图 | 入口路由、命名地标、Follow-in-nav 规则 + 预检 | StackOverflow 根因定位 |
-| 10 | 串行阶段太慢 | 13 阶段、逐层往返 | Lite：单会话 ReAct + 独立冻结测试 | Keep 225.7 s、BookStack 369.6 s |
+| 10 | 串行阶段太慢 | 13 阶段、逐层往返 | Lite：单会话 ReAct + 独立冻结测试 | 耗时显著下降（见数据分析） |
 
 ---
 
-## 5. 结果与数据（报告图表底稿）
+## 5. 数据与图表
 
-### 5.1 已有数据（可直接画图）
-
-| 数据 | 值 | 来源/条件 |
-| --- | --- | --- |
-| BookStack staged 总耗时 | 5037 s | `semantics_enhanced` 日志；8 需求/9 页面 |
-| BookStack staged 模型调用 | 212 | 同上 |
-| Keep staged 总耗时 | 4256 s | `semantics_keep` 日志；6 需求 |
-| StackOverflow staged 总耗时 | 19068 s | 535 次模型调用；17 需求 |
-| StackOverflow 阶段占比 | 12=8460 s、08=3179 s、10=2033 s、11=1621 s | 同上 |
-| Lite Keep | 225.7 s，11/11 自测 + 11/11 外部 | README |
-| Lite BookStack（a2） | 约 574 s 生成，12/12 自测 + 12/12 外部 | README |
-| Lite BookStack（a3 完整） | 1191.2 s，35/35 自测 | README；平台待测 |
-| 合并后测试 | 400 passed / 53 skipped | 本地 full suite |
-| 本地模型账本 | 114 次请求，约 $0.2686 | README（含失败/复核） |
-
-### 5.2 待补充的数据（图表用）
-
-| 图表 | 需要的数据 | 当前状态 |
-| --- | --- | --- |
-| staged vs Lite 时间对比（BookStack/Keep/StackOverflow） | 同一输入、同一模型、同一外部套件的耗时 | 各任务测量条件不同，需同条件复跑【待填】 |
-| BookStack 外部通过率趋势 | 每轮版本号、用例数、通过数、失败用例名 | 3/12→4/12→11/12→12/12→7/11 已有；7/11 失败构成待填 |
-| Lite 分阶段耗时 | 测试生成/编译/实现/verify 各段耗时 | README 只有总耗时【待填】 |
-| 失败类型分布 | 按"定位/数据/接口/入口/语义"分类计数 | 可从 `output/*/compiler.log` 与 ArcBench.html 统计【待填】 |
-| 成本 | 每任务 token/费用 | 只有累计账本；单轮 usage 需从 run report 提取【待填】 |
-
-> 建议：报告里所有对比图都标注"测试版本、模型、输入、是否含外部评估"，避免把不同口径的数字放在同一根柱子上。
+所有提交分数、版本映射、运行/Token 数据缺口、M8-M10 Keep 复盘和样图，见
+[提交数据分析](submission-data-analysis.md)。本文不再维护数据表，避免历史叙事与平台数据两处漂移。
 
 ---
 
@@ -359,15 +318,15 @@ runner、verification、tools、browser_tools、provenance）。
 ### Slide 6（0:50）转折：轻量 ReAct 架构
 
 - 完整需求契约 + 独立冻结测试 + 单会话跨层实现 + verify 回灌。
-- 时间：Keep 225.7 s、BookStack 369.6 s（对比 staged 的 5037 s/4256 s）。
-- 结果：Keep 11/11 外部；BookStack Lite 12/12 外部（a2）。
+- 时间/通过率数据见[提交数据分析](submission-data-analysis.md)；这里讲架构动机与代价。
+- 结果：Keep 与 BookStack Lite 都出现过 11/11、12/12 的外部成绩（版本口径见分析）。
 - 图：staged vs Lite 时间对比（同条件数据待补）。
 
 ### Slide 7（0:40）结果总表
 
-- 任务 × 引擎 × 外部成绩 × 耗时（表格）。
+- 用[提交数据分析](submission-data-analysis.md)中的表格/趋势图，不在这里重复数字。
 - 标注：不同轮次测试版本/模型不同，数字不可直接横比。
-- 高亮：BookStack 12/12（staged 最好）、Lite 12/12（a2）、Keep 11/11。
+- 高亮：staged 的 12/12 与 Lite 的 12/12 是两条线的代表性成绩。
 
 ### Slide 8（0:30）经验与反思
 
@@ -381,20 +340,8 @@ runner、verification、tools、browser_tools、provenance）。
 
 ---
 
-## 9. 图表数据清单（制作 PPT 时逐项填）
 
-| 编号 | 图 | 数据文件/来源 | 状态 |
-| --- | --- | --- | --- |
-| C1 | staged vs Lite 单任务耗时 | 本地同条件复跑记录 | 【待填】 |
-| C2 | BookStack 外部通过数趋势 | 每轮平台结果/`docs/logs` | 3/12、4/12、11/12、12/12、7/11 已知；7/11 明细待填 |
-| C3 | Lite 各阶段耗时堆叠 | `react-report.json`/`react-submission.json` | 【待填】 |
-| C4 | 失败类型分布 | `compiler.log` + ArcBench.html | 【待填】 |
-| C5 | 模型调用/费用 | run report usage | 累计 114 次/$0.2686 已知；单任务待填 |
-| C6 | 测试规模 | full suite / per-module | 400 tests（53 skipped）已知 |
-
----
-
-## 10. 参考材料（仓库内）
+## 9. 参考材料（仓库内）
 
 - `README.md`：Lite 架构、验证范围、运行与打包。
 - `REACT_EXPERIMENT.md`：策略对比、实验边界。
