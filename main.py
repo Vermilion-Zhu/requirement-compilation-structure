@@ -49,16 +49,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=3000,
         help="Default generated backend port and frontend API proxy target (default: 3000)")
     default_engine = "staged"
+    default_plan_batches = os.environ.get("REACT_PLAN_BATCHES", "").strip().lower() in {"1", "true", "yes", "on"}
     release = Path(__file__).with_name("agent-release.json")
     if release.is_file():
         try:
-            default_engine = json.loads(release.read_text(encoding="utf-8"))["engine"]
+            release_data = json.loads(release.read_text(encoding="utf-8"))
+            default_engine = release_data["engine"]
             if default_engine not in {"staged", "react"}:
                 raise ValueError("Unknown release engine")
+            default_plan_batches = bool(release_data.get("plan_batches", default_plan_batches))
         except (OSError, ValueError, KeyError, TypeError) as error:
             parser.error(f"Invalid agent-release.json: {error}")
     parser.add_argument("--engine", choices=("staged", "react"), default=default_engine,
         help="Execution engine (default from agent-release.json, otherwise staged)")
+    parser.add_argument("--plan-batches", action="store_true", default=default_plan_batches,
+        help="Experimental Lite mode: plan implementation batches and verify each batch separately")
     parser.add_argument("--type", dest="task_type",
         default=os.environ.get("ARCBENCH_TASK_TYPE", "").strip() or "web",
         help="ARC-Bench task type; only 'web' is implemented (default: $ARCBENCH_TASK_TYPE or web)")
@@ -114,7 +119,8 @@ def main(argv: list[str] | None = None) -> None:
             report = compile_application(args.requirement_path, args.output_dir,
                 playwright_cli=Path(cli) if cli else None, channel=os.environ.get("REACT_BROWSER_CHANNEL") or None,
                 time_budget=float(os.environ["REACT_TIME_BUDGET"]) if os.environ.get("REACT_TIME_BUDGET") else None,
-                max_steps=int(os.environ["REACT_MAX_STEPS"]) if os.environ.get("REACT_MAX_STEPS") else None)
+                max_steps=int(os.environ["REACT_MAX_STEPS"]) if os.environ.get("REACT_MAX_STEPS") else None,
+                plan_batches=args.plan_batches)
         except KeyboardInterrupt:
             raise SystemExit(130)
         except Exception as error:

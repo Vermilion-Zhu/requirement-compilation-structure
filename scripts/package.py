@@ -33,7 +33,7 @@ def ignored_names(directory: Path, paths: list[Path]) -> set[str]:
     return {os.fsdecode(name) for name in result.stdout.split(b"\0") if name}
 
 
-def package_directory(root: Path, output: Path, *, engine="staged") -> int:
+def package_directory(root: Path, output: Path, *, engine="staged", plan_batches=False) -> int:
     """Archive non-ignored entries, replacing the output only on success."""
     if engine not in {"staged", "react"}:
         raise ValueError("Unknown execution engine")
@@ -87,6 +87,8 @@ def package_directory(root: Path, output: Path, *, engine="staged") -> int:
                                    capture_output=True, text=True, check=True).stdout.splitlines()
             manifest = {"schema_version": 1, "engine": engine, "version": version, "source_commit": commit,
                         "dirty_paths": dirty, "files": files}
+            if plan_batches:
+                manifest["plan_batches"] = True
             archive.writestr("agent-release.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
             entries += 1
         os.replace(temporary_path, output)
@@ -102,13 +104,15 @@ def main() -> None:
         help="Output archive path (default: compiler.zip)")
     parser.add_argument("--engine", choices=("staged", "react"), default="staged",
         help="Default engine recorded in the release manifest (default: staged)")
+    parser.add_argument("--plan-batches", action="store_true",
+        help="Enable the experimental Lite planning/batch mode in the release manifest")
     args = parser.parse_args()
     root = Path.cwd().resolve()
     output = args.output.expanduser().resolve()
     print(f"Source: {root}")
     print(f"Archive: {output}")
     try:
-        entries = package_directory(root, output, engine=args.engine)
+        entries = package_directory(root, output, engine=args.engine, plan_batches=args.plan_batches)
     except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile) as error:
         parser.exit(1, f"Packaging failed: {error}\n")
     print(f"Created {output} ({entries} entries, {output.stat().st_size:,} bytes)")

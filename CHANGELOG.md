@@ -62,6 +62,15 @@
 | **E2E 启动开销** | 每次 E2E 都重新拉起 Vite + 后端 | 每个应用只起一对服务器并跨多次 E2E 复用：端口固定、后端源码指纹变化时才重启、数据库复用并由 fixture 每测例清空；Playwright 用 `reuseExistingServer` 跳过启动；失败自动回退并在本阶段停用复用，阶段结束 `stop_e2e_servers` 回收（并用 bookstack 真实产物本地复现后修好四处：Vite 相对路径、.arc 未建即写日志、重启后端复用已删除的临时目录、runner 后端未回收；runner 现在**完全静默**，执行模式只写 .arc/e2e-runs.jsonl，Playwright 报告解析另有前缀容错） |
 | **日志分析工具** | 上一轮的分析是一次性脚本 | 新增 `scripts/analyze_log.py`：解析阶段耗时、检查命令分类与最慢项、模型调用/令牌/分阶段耗时、编辑轮次与拒绝、读取拒绝与被请求文件、依赖安装、Git checkpoint、最终状态；支持 `--json` 与 `--top`，并有单元测试 |
 
+### 2.12 实验：Lite 实现规划与分批验收
+
+| 项 | 内容 |
+| --- | --- |
+| 功能 | Lite 增加可选的“规划 + 分批实现”：先根据需求契约和冻结用例清单生成有依赖顺序的实现批次，每批只跑映射到该批的冻结用例，最后一批通过后跑全量套件 |
+| 开关 | --plan-batches、REACT_PLAN_BATCHES=1，或 scripts/package.py --engine react --plan-batches 写入发布清单；默认关闭，行为与原来一致 |
+| 证据 | OUTPUT/.arc/implementation-plan.json（规划）与 OUTPUT/.arc/react-report.json 的 plan（批次状态/当前批次） |
+| 边界 | 规划模型不读取测试源码；测试仍冻结、不可修改；规划失败或输出不合法时回退到确定性分组 |
+
 ### 2.11 第十一轮：提交前语义探针（M10）
 
 | 项 | 内容 |

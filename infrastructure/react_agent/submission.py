@@ -7,6 +7,7 @@ import math
 from uuid import uuid4
 
 from infrastructure.react_agent.browser_tools import prepare_browser
+from infrastructure.react_agent.planning import plan_implementation, save_plan
 from infrastructure.react_agent.requirements import compile_requirements
 from infrastructure.react_agent.runner import ConversationModel, run
 from infrastructure.react_agent.test_plan import PLAN_INSTRUCTIONS, compile_plan, validate_plan
@@ -32,7 +33,8 @@ def partition_contracts(contracts: dict, scenario_limit=12) -> list[dict]:
 
 def compile_application(requirements: Path, output: Path, *, playwright_cli: Path | None = None,
                         channel=None, time_budget=None, max_steps=None, test_model=None,
-                        implementation_model=None, install=True, checker=None) -> dict:
+                        implementation_model=None, install=True, checker=None,
+                        plan_batches=False, plan_model=None, scenario_limit=12) -> dict:
     """Include independent test generation and collection in the same run deadline."""
     requirements, output = requirements.resolve(), output.resolve()
     if (time_budget is not None and time_budget <= 0) or (max_steps is not None and max_steps < 1):
@@ -106,11 +108,26 @@ def compile_application(requirements: Path, output: Path, *, playwright_cli: Pat
         if monotonic() >= deadline:
             report["status"] = "TIME_LIMIT"
             return report
+        plan = None
+        if plan_batches:
+            if math.isfinite(deadline) and deadline <= monotonic():
+                report["status"] = "TIME_LIMIT"
+                return report
+            planning_timeout = min(180, deadline - monotonic()) if math.isfinite(deadline) else 180
+            plan, planning_report = plan_implementation(contracts, suite.manifest,
+                model=plan_model or test_model, timeout=max(1, planning_timeout), scenario_limit=scenario_limit)
+            save_plan(output, plan)
+            report["plan"] = {**planning_report, "batches": plan["batches"], "source": plan["source"],
+                "warnings": plan.get("warnings", [])}
+            if math.isfinite(deadline) and deadline <= monotonic():
+                report["status"] = "TIME_LIMIT"
+                return report
         report["status"] = "IMPLEMENTING"
         save_json(report_path, report)
         application = run(requirements, output, model=implementation_model, acceptance=suite,
                           install=install, checker=checker, max_steps=max_steps,
-                          time_budget=deadline-monotonic() if math.isfinite(deadline) else None)
+                          time_budget=deadline-monotonic() if math.isfinite(deadline) else None,
+                          plan=plan)
         report.update(status=application["status"], behavior_verified=application["behavior_verified"],
                       application_report=".arc/react-report.json")
         return report

@@ -86,16 +86,26 @@ class BrowserSuite:
 
     def for_application(self, root: Path):
         """Bind the application root without sharing mutable run state across checks."""
-        return lambda url, artifacts, timeout: self(url, artifacts, timeout, application_root=root.resolve())
+        return lambda url, artifacts, timeout, cases=None: self(url, artifacts, timeout,
+            application_root=root.resolve(), cases=cases)
 
     def collect(self, artifacts: Path, timeout: float = 30) -> dict:
         """Check executable case inventory against the compiler's evidence manifest."""
         return self("http://127.0.0.1:9", artifacts, timeout, collect_only=True)
 
-    def __call__(self, url: str, artifacts: Path, timeout: float, *, collect_only=False, application_root=None) -> dict:
+    def __call__(self, url: str, artifacts: Path, timeout: float, *, collect_only=False,
+                 application_root=None, cases: list[str] | None = None) -> dict:
         artifacts = artifacts.resolve()
         if self.snapshot() != self.hashes:
             return {"passed": False, "kind": "TEST_SUITE_CHANGED", "error": "Frozen acceptance files changed"}
+        selection = None
+        if cases is not None:
+            selection = list(dict.fromkeys(str(title) for title in cases))
+            known = {item["title"] for item in (self.manifest or {}).get("cases", [])}
+            unknown = [title for title in selection if title not in known]
+            if unknown:
+                return {"passed": False, "kind": "TEST_SUITE_ERROR",
+                    "error": "Selected cases are not in the frozen suite: " + ", ".join(unknown)}
         artifacts.mkdir(parents=True, exist_ok=True)
         use = {"baseURL": url, "screenshot": "only-on-failure", "trace": "retain-on-failure", "actionTimeout": 10000}
         if self.channel:
@@ -114,6 +124,8 @@ class BrowserSuite:
             environment["ARC_TEST_APPLICATION_ROOT"] = str(application_root)
         try:
             command = ["node", str(self.cli), "test", "--config", str(path), "--reporter=json"]
+            if selection:
+                command.extend(["--grep", "|".join(re.escape(title) for title in selection)])
             if collect_only:
                 command.append("--list")
             process = capture_process(command,
@@ -143,13 +155,19 @@ class BrowserSuite:
             for rid in requirement_ids:
                 requirements.setdefault(rid, []).append(case["status"])
         if self.manifest:
-            missing = [item for item in self.manifest["cases"] if
+            expected = self.manifest["cases"]
+            if selection is not None:
+                selected = set(selection)
+                expected = [item for item in expected if item["title"] in selected]
+            missing = [item for item in expected if
                        ((self.directory / item["file"]).resolve(), item["title"]) not in observed]
             if missing or "UNMAPPED" in requirements:
                 result.update(passed=False, kind="TEST_SUITE_ERROR", missing_case_claims=missing)
         result["requirements"] = {rid: {"status": "FAILED" if "FAILED" in states else
             "PASSED" if all(state == "PASSED" for state in states) else "UNVERIFIED", "cases": len(states)}
             for rid, states in requirements.items()}
+        if selection is not None:
+            result["selected_cases"] = selection
         if self.snapshot() != self.hashes:
             result.update(passed=False, kind="TEST_SUITE_CHANGED")
         result["source_hashes"] = self.hashes

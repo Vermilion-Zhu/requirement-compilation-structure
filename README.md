@@ -306,6 +306,27 @@ uv run main.py input --output-dir outputs/demo --engine react
 
 `REACT_PLAYWRIGHT_CLI` 留空时自动准备工具。运行器的文件工具限制输入和输出路径，命令工具以宿主进程权限执行。子应用和测试进程清除模型密钥环境变量。部署环境负责进程和文件访问隔离。
 
+### 实现计划与分批验收（实验）
+
+Lite 默认仍是一套冻结验收套件、单会话实现。实验模式会先用一次规划请求把实现需求分成有依赖顺序的批次，
+每个批次只跑映射到该批次的冻结用例，通过后自动进入下一批；最后一批通过后再跑一次全量套件作为最终门禁。
+规划只看需求契约和用例清单（标题/需求/步骤数），不读取测试源码；测试文件仍不可修改。
+
+```powershell
+uv run main.py input --output-dir outputs/demo --engine react --plan-batches
+# 或
+$env:REACT_PLAN_BATCHES='1'
+uv run main.py input --output-dir outputs/demo --engine react
+```
+
+当前不做激进压缩：每批结束只追加批次完成/下一批的 transition，保留完整对话与工具观察；
+暂不在每批结束强制回归前序批次（修改前序接口的写集仍允许），最终全量套件作为兜底门禁；
+后续根据实际运行成本再决定是否增加摘要或前序回归。规划结果写入
+`OUTPUT/.arc/implementation-plan.json`，批次状态写入
+`OUTPUT/.arc/react-report.json` 的 `plan` 字段。发布包可用
+`uv run python scripts/package.py --engine react --plan-batches` 把开关写进
+`agent-release.json`；不设置时行为与之前完全一致。
+
 ### 原十三阶段入口
 
 ```bash

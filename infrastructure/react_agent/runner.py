@@ -78,11 +78,27 @@ class ConversationModel(TextModel):
         return parse_json_object(response.choices[0].message.content), usage
 
 
-def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
+def _run_acceptance(acceptance, url: str, artifacts: Path, timeout: float, cases=None) -> dict:
+    """Call a suite with an optional case selection; plain callables keep the old signature."""
+    if cases is None:
+        return acceptance(url, artifacts, timeout)
+    try:
+        return acceptance(url, artifacts, timeout, cases=cases)
+    except TypeError as error:
+        if "cases" not in str(error):
+            raise
+        return acceptance(url, artifacts, timeout)
+
+
+def startup_check(output: Path, timeout: float, *, acceptance=None, cases=None) -> dict:
     """Check the actual build and a temporary server, cleaning up its entire tree."""
     if not math.isfinite(timeout):
-        cases = getattr(acceptance, "manifest", None) or {}
-        timeout = 360 + sum(30 + 2 * case.get("step_count", 0) for case in cases.get("cases", []))
+        manifest = getattr(acceptance, "manifest", None) or {}
+        selected = manifest.get("cases", [])
+        if cases is not None:
+            chosen = set(cases)
+            selected = [case for case in selected if case.get("title") in chosen]
+        timeout = 360 + sum(30 + 2 * case.get("step_count", 0) for case in selected)
     started = monotonic()
     bind = getattr(acceptance, "for_application", None)
     if callable(bind):
@@ -117,7 +133,8 @@ def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
                         page = response.status == 200 and b"<html" in response.read().lower()
                     result = {"passed": healthy and page, "build": True, "health": healthy, "page": page}
                     if result["passed"] and acceptance:
-                        result["acceptance"] = acceptance(url, artifacts, max(.1, timeout-(monotonic()-started)))
+                        result["acceptance"] = _run_acceptance(acceptance, url, artifacts,
+                            max(.1, timeout-(monotonic()-started)), cases=cases)
                         result["passed"] = result["acceptance"]["passed"]
                     return result
                 sleep(.1)
@@ -127,7 +144,7 @@ def startup_check(output: Path, timeout: float, *, acceptance=None) -> dict:
 
 
 def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_budget=None,
-        install=True, checker=None, acceptance=None, resume=False) -> dict:
+        install=True, checker=None, acceptance=None, resume=False, plan=None) -> dict:
     """Build in one conversation. Every failure remains an observation or explicit status."""
     if (max_steps is not None and max_steps < 1) or (time_budget is not None and time_budget <= 0):
         raise ValueError("max_steps and time_budget must be positive")
@@ -176,6 +193,18 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
     report["input"] = {key: contracts[key] for key in ("source_sha256", "requirement_sha256")}
     report["acceptance_source_hashes"] = getattr(acceptance, "hashes", None)
     report["requirements"] = {rid: {"status": "UNVERIFIED"} for rid in contracts["implementation_ids"]}
+    batches = list((plan or {}).get("batches") or []) if plan else []
+    if plan and not batches:
+        raise ValueError("An implementation plan needs at least one batch")
+    batch_index = 0
+    batch_state = None
+    if plan:
+        batch_state = {"source": plan.get("source", "unknown"), "current_index": 0,
+            "batches": [{key: batch.get(key) for key in ("id", "requirements", "tests", "goal", "depends_on")}
+                | {"status": "IN_PROGRESS" if index == 0 else "PENDING"}
+                for index, batch in enumerate(batches)]}
+        report["plan"] = batch_state
+        save_json(arc / "implementation-plan.json", plan)
     messages = [{"role": "user", "content": json.dumps({
         "requirement_contracts": contracts, "application_root": str(output),
         "input_root": "input/", "platform": sys.platform,
@@ -190,6 +219,11 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
         "files": [] if resume else sorted(p.relative_to(output).as_posix() for p in output.rglob("*")
                         if p.is_file() and not any(part in {"node_modules", ".arc", ".git", "dist"}
                                                  for part in p.relative_to(output).parts)),
+        "implementation_plan": plan,
+        "current_batch": batches[batch_index] if plan else None,
+        "batch_instructions": ("Implement current_batch first. verify runs only its mapped frozen tests; "
+            "a pass advances the controller to the next batch. The final batch pass triggers the full suite. "
+            "Keep earlier interfaces working when later batches need them; do not edit frozen tests.") if plan else None,
     }, ensure_ascii=False)}]
     if session is not None:
         current_context = json.loads(messages[0]["content"])
@@ -199,6 +233,15 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
                 "Use verify for the supplied independent acceptance and repair actual application failures.",
         }, ensure_ascii=False)}]
         previous = session["report"]
+        if plan and isinstance(previous.get("plan"), dict):
+            saved = previous["plan"]
+            saved_batches = saved.get("batches") or []
+            if len(saved_batches) == len(batches):
+                batch_state = saved
+                batch_index = min(int(saved.get("current_index", 0)), len(batches) - 1)
+                batch_state["current_index"] = batch_index
+                batch_state["batches"][batch_index]["status"] = "IN_PROGRESS"
+                report["plan"] = batch_state
         report["previous_runs"] = [*previous.get("previous_runs", []),
             {key: previous.get(key) for key in ("status", "steps", "elapsed_seconds", "usage", "framework")}]
     trajectory = arc / "react-trajectory.jsonl"
@@ -265,6 +308,16 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
             if not isinstance(actions, list) or not actions or len(actions) > 20:
                 actions = [{"tool": "invalid"}]
             observations = []
+            batch_transition = None
+
+            def apply_evidence(evidence, complete=False):
+                observed = evidence.get("requirements") or {}
+                for rid in report["requirements"]:
+                    if rid in observed:
+                        report["requirements"][rid] = observed[rid]
+                    elif complete or not plan:
+                        report["requirements"][rid] = {"status": "UNVERIFIED"}
+
             for action in actions:
                 remaining = deadline-monotonic()
                 if remaining <= 0:
@@ -276,15 +329,47 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
                     if action.get("tool") in {"verify", "finish"}:
                         if len(actions) != 1:
                             raise ValueError("Verification must be the only action")
-                        result = checker(output, remaining) if checker else startup_check(output, remaining, acceptance=acceptance)
+                        batch = batches[batch_index] if plan else None
+                        subset = batch.get("tests") if batch else None
+                        check_acceptance = acceptance if (not plan or subset) else None
+                        result = checker(output, remaining) if checker else startup_check(output, remaining,
+                            acceptance=check_acceptance, cases=subset if plan else None)
                         report["checks"] = result
                         evidence = result.get("acceptance", {})
                         if evidence:
-                            for rid in report["requirements"]:
-                                report["requirements"][rid] = evidence.get("requirements", {}).get(rid, {"status": "UNVERIFIED"})
+                            apply_evidence(evidence)
                         if evidence.get("kind") in {"CHECK_ENVIRONMENT_ERROR", "TEST_SUITE_ERROR", "TEST_SUITE_CHANGED"}:
                             report.update(status=evidence["kind"])
-                        if result.get("passed"):
+                        if result.get("passed") and plan:
+                            batch_state["batches"][batch_index]["status"] = "PASSED"
+                            report.setdefault("batch_checks", []).append({
+                                "batch": batch["id"], "stage": "BATCH", "passed": True,
+                                "cases": len(subset or []), "result": result})
+                            if batch_index + 1 < len(batches):
+                                batch_index += 1
+                                batch_state["current_index"] = batch_index
+                                batch_state["batches"][batch_index]["status"] = "IN_PROGRESS"
+                                batch_transition = {"batch_completed": batch["id"],
+                                    "next_batch": batches[batch_index],
+                                    "instruction": "The batch passed. Implement the next batch; verify will run only its cases."}
+                            else:
+                                full = checker(output, remaining) if checker else startup_check(output, remaining,
+                                    acceptance=acceptance)
+                                report["checks"] = full
+                                full_evidence = full.get("acceptance", {})
+                                if full_evidence:
+                                    apply_evidence(full_evidence, complete=True)
+                                if full_evidence.get("kind") in {"CHECK_ENVIRONMENT_ERROR", "TEST_SUITE_ERROR", "TEST_SUITE_CHANGED"}:
+                                    report.update(status=full_evidence["kind"])
+                                if full.get("passed"):
+                                    verified = bool(full_evidence) and all(item["status"] == "PASSED"
+                                        for item in report["requirements"].values())
+                                    report.update(status="ACCEPTANCE_PASSED" if full_evidence else "BUILD_AND_STARTUP_PASSED",
+                                        behavior_verified=verified, summary=action.get("summary", ""))
+                                else:
+                                    result = full
+                                    batch_state["batches"][batch_index]["status"] = "FINAL_CHECK_FAILED"
+                        elif result.get("passed"):
                             verified = bool(evidence) and all(item["status"] == "PASSED" for item in report["requirements"].values())
                             report.update(status="ACCEPTANCE_PASSED" if evidence else "BUILD_AND_STARTUP_PASSED",
                                           behavior_verified=verified, summary=action.get("summary", ""))
@@ -311,9 +396,12 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
                 if report["status"] != "RUNNING":
                     break
             record({"step": step, "observations": observations})
-            messages.append({"role": "user", "content": json.dumps({"observations": observations,
-                "remaining_steps": step_limit-step, "remaining_seconds": round(max(0, deadline-monotonic())) if math.isfinite(deadline) else None},
-                ensure_ascii=False)})
+            payload = {"observations": observations,
+                "remaining_steps": step_limit-step, "remaining_seconds": round(max(0, deadline-monotonic())) if math.isfinite(deadline) else None}
+            if batch_transition:
+                payload["batch_transition"] = batch_transition
+                report["plan"] = batch_state
+            messages.append({"role": "user", "content": json.dumps(payload, ensure_ascii=False)})
             save_json(arc / "react-report.json", report)
             save_session()
             if report["status"] != "RUNNING":

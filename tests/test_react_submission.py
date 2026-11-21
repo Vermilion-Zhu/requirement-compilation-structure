@@ -60,6 +60,23 @@ class ReactSubmissionTests(unittest.TestCase):
         implementation = json.loads((self.output / ".arc/react-report.json").read_text(encoding="utf-8"))
         self.assertTrue(implementation["acceptance_source_hashes"])
 
+    def test_plan_batches_records_a_validated_plan_and_verifies_per_batch(self):
+        evidence = {"passed": True, "kind": "ACCEPTANCE_PASSED", "requirements": {"R": {"status": "PASSED"}}}
+        plan_model = Mock()
+        plan_model.generate.return_value = ({"batches": [{"id": "B1", "requirements": ["R"],
+            "goal": "implement R"}]}, {"total_tokens": 3})
+        checks = []
+        with patch("infrastructure.react_agent.submission.BrowserSuite.collect",
+                   return_value={"passed": True, "kind": "COLLECTION_PASSED"}):
+            report = self.compile(plan_batches=True, plan_model=plan_model,
+                checker=lambda *_: (checks.append(1) or {"passed": True, "acceptance": evidence}))
+        self.assertEqual(report["plan"]["source"], "model")
+        self.assertEqual(report["plan"]["batches"][0]["id"], "B1")
+        self.assertEqual(len(checks), 2)
+        saved = json.loads((self.output / ".arc/implementation-plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["batches"][0]["tests"], ["R / Greeting"])
+        self.assertEqual(report["status"], "ACCEPTANCE_PASSED")
+
     def test_collection_failure_prevents_application_generation(self):
         with patch("infrastructure.react_agent.submission.BrowserSuite.collect",
                    return_value={"passed": False, "kind": "TEST_SUITE_ERROR"}):
