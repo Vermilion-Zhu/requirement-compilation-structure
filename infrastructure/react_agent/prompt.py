@@ -13,6 +13,11 @@ Honor ui_declarations.container ownership. An action declared inside feedback be
 inside that feedback element, whose explicit label keeps its accessible name separate.
 Associate form labels with controls using explicit htmlFor/id pairs, keeping field
 names independent of their current values, including prefilled multiline inputs.
+Text inputs and textareas should also expose their field label as the HTML placeholder
+attribute, for example placeholder="Field name" on the title and body fields of an
+editor. Keep this consistent between create and edit forms. Browser checks may locate
+fields by placeholder even when the requirement only names their textbox role; this is
+the input hint attribute, not a placeholder implementation.
 
 Keep a short progress note in each response. Inspect related files in batches, make
 related edits together, then check the result. You can continue editing before checking.
