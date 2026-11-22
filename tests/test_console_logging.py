@@ -290,6 +290,17 @@ class ConsoleLogging(unittest.TestCase):
         self.assertIn("Round-trip latency", terminal.getvalue())
         self.assertIn("Stage 06", terminal.getvalue())
 
+    def test_sessionless_model_calls_keep_input_out_of_terminal(self):
+        model = self.model(lambda request: httpx.Response(200, json=self.response(json.dumps({"ok": True}))))
+        terminal = StringIO()
+        with redirect_stdout(terminal):
+            invoke(model.client, {"model": model.name, "messages": [
+                {"role": "user", "content": "PRIVATE-SESSIONLESS-PROMPT"}]})
+        output = terminal.getvalue()
+        self.assertNotIn("PRIVATE-SESSIONLESS-PROMPT", output)
+        self.assertNotIn("[MODEL INPUT]", output)
+        self.assertIn("[MODEL CALL]", output)
+
     def test_missing_usage_has_no_local_estimate(self):
         summary = _usage_summary({})
         self.assertIn("input: unavailable", summary)

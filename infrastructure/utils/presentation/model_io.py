@@ -130,6 +130,27 @@ def _input_summary(arguments: dict) -> str:
     return "\n".join(lines)
 
 
+def _input_brief(arguments: dict) -> str:
+    """Summarize a sessionless call without repeating every historical message."""
+    messages = arguments.get("messages", [])
+    size = sum(len(message.get("content") or "") if isinstance(message.get("content"), str)
+        else sum(len(part.get("text") or "") for part in message.get("content") or [])
+        for message in messages)
+    line = f"Model: {arguments.get('model')} | Messages: {len(messages)} | Input chars: {size:,}"
+    if messages:
+        last = messages[-1]
+        line += f" | Last: {last.get('role')}"
+        content = last.get("content")
+        if isinstance(content, str):
+            try:
+                payload = json.loads(content)
+            except ValueError:
+                payload = None
+            if isinstance(payload, dict):
+                line += " | sections: " + ", ".join(payload)
+    return line
+
+
 def _usage_summary(usage: dict) -> str:
     """Keep a compact plain-text usage line in the persistent log."""
     counts = _usage_counts(usage)
@@ -275,12 +296,13 @@ def invoke(client, arguments: dict):
     session = session_info()
     label = f"{session['stage']} | {activity}" if session else activity
     token = _call.set({"id": call_id, "activity": activity})
-    verbose = session is None or session.get("model_log", True)
+    verbose = bool(session and session.get("model_log", False))
     if verbose:
         full_detail(f"[MODEL INPUT] {label}", "\n\n".join(_message_text(message) for message in arguments.get("messages", [])))
         show_panel(f"[MODEL INPUT] {label} | call {call_id[:8]}", _input_view(arguments), tone="input")
     else:
-        show_panel(f"[MODEL CALL] {label} | call {call_id[:8]}", f"Model: {arguments.get('model')}", tone="input")
+        show_panel(f"[MODEL CALL] {label} | call {call_id[:8]}",
+            _input_brief(arguments) if session is None else _input_summary(arguments), tone="input")
     waiting = WaitingStatus()
     started = monotonic()
 
