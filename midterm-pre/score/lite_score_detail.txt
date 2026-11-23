@@ -1,0 +1,1004 @@
+First Deployable Agent
+2026/11/4 20:22:10
+
+Model
+—
+Archive
+compiler.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+0.74
+Test pass rate
+1.1%
+2 / 182
+Model cost
+5.8446 CNY
+Total runtime
+79m 57s
+Tokens
+3.503M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+11.20
+Tests
+16.7%
+Features
+12.5%
+Runtime
+79m 57s
+Tokens
+3.503M
+Cost
+5.8446 CNY
+
+
+Full-hooked and E2E Enhanced
+2026/11/5 00:05:01
+
+Model
+—
+Archive
+compiler.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+1.25
+Test pass rate
+1.6%
+3 / 182
+Model cost
+4.7180 CNY
+Total runtime
+179m 45s
+Tokens
+2.655M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+19.01
+Tests
+25.0%
+Features
+25.0%
+Runtime
+179m 45s
+Tokens
+2.655M
+Cost
+4.7180 CNY
+
+
+Nowicthelight
+2026/11/5 16:30:47
+
+Model
+—
+Archive
+compiler.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+1.68
+Test pass rate
+3.3%
+6 / 182
+Model cost
+69.5181 CNY
+Total runtime
+837m 23s
+Tokens
+56.522M
+Task results
+6
+12306 railway travel
+Open run 
+Score
+6.25
+Tests
+12.2%
+Features
+3.2%
+Runtime
+837m 23s
+Tokens
+56.522M
+Cost
+69.5181 CNY
+
+
+Nowicthelight
+2026/11/5 16:46:56
+
+Model
+—
+Archive
+compiler.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+1.38
+Test pass rate
+2.7%
+5 / 182
+Model cost
+61.9489 CNY
+Total runtime
+825m 3s
+Tokens
+53.480M
+Task results
+6
+12306 railway travel
+Open run 
+Score
+5.14
+Tests
+10.2%
+Features
+3.2%
+Runtime
+825m 3s
+Tokens
+53.480M
+Cost
+61.9489 CNY
+
+
+Baseline Test
+2026/11/5 18:29:56
+
+Model
+—
+Archive
+baseline.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+0.74
+Test pass rate
+1.1%
+2 / 182
+Model cost
+5.5895 CNY
+Total runtime
+90m 23s
+Tokens
+3.632M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+11.30
+Tests
+16.7%
+Features
+12.5%
+Runtime
+90m 23s
+Tokens
+3.632M
+Cost
+5.5895 CNY
+
+
+Semantics Enhanced
+2026/11/5 23:52:51
+
+Model
+—
+Archive
+semantics.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+7.33
+Test pass rate
+10.4%
+19 / 182
+Model cost
+44.6019 CNY
+Total runtime
+776m 51s
+Tokens
+30.717M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+89.44
+Tests
+91.7%
+Features
+87.5%
+Runtime
+83m 58s
+Tokens
+2.786M
+Cost
+4.9771 CNY
+
+
+UI Naming 20261107
+2026/11/7 15:14:22
+
+Model
+—
+Archive
+compiler-ui-naming-20261107.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+5.35
+Test pass rate
+5.5%
+10 / 182
+Model cost
+4.5703 CNY
+Total runtime
+60m 42s
+Tokens
+2.324M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+88.52
+Tests
+90.9%
+Features
+83.3%
+Runtime
+60m 42s
+Tokens
+2.324M
+Cost
+4.5703 CNY
+
+
+GYP No.1
+2026/11/7 19:52:52
+
+Model
+—
+Archive
+gyp.no1.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+4.10
+Test pass rate
+4.4%
+8 / 182
+Model cost
+4.5149 CNY
+Total runtime
+62m 50s
+Tokens
+2.764M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+67.89
+Tests
+72.7%
+Features
+83.3%
+Runtime
+62m 50s
+Tokens
+2.764M
+Cost
+4.5149 CNY
+
+
+Full-hooked 20261107 dzs
+2026/11/7 23:29:11
+
+Model
+—
+Archive
+compiler-hooks.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+0.34
+Test pass rate
+0.5%
+1 / 182
+Model cost
+4.3733 CNY
+Total runtime
+55m 33s
+Tokens
+2.314M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+5.63
+Tests
+9.1%
+Features
+16.7%
+Runtime
+55m 33s
+Tokens
+2.314M
+Cost
+4.3733 CNY
+
+
+IR amended 20261109 zmr
+2026/11/9 19:05:53
+
+Model
+—
+Archive
+ir_amended.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+5.25
+Test pass rate
+6.0%
+11 / 182
+Model cost
+8.8869 CNY
+Total runtime
+118m 33s
+Tokens
+5.023M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+19.15
+Tests
+25.0%
+Features
+25.0%
+Runtime
+59m 57s
+Tokens
+2.564M
+Cost
+4.5544 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+68.45
+Tests
+72.7%
+Features
+83.3%
+Runtime
+58m 36s
+Tokens
+2.459M
+Cost
+4.3325 CNY
+
+
+Breadcrumb-fixed 20261111 zmr
+2026/11/11 18:31:23
+
+Model
+—
+Archive
+breadcrumb.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+13.35
+Test pass rate
+15.9%
+29 / 182
+Model cost
+28.0467 CNY
+Total runtime
+468m 57s
+Tokens
+18.828M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+100.14
+Tests
+100.0%
+Features
+100.0%
+Runtime
+71m 5s
+Tokens
+2.883M
+Cost
+4.7350 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+68.09
+Tests
+72.7%
+Features
+83.3%
+Runtime
+79m 59s
+Tokens
+2.339M
+Cost
+4.4490 CNY
+PrestaShop B2C storefront
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Stack Overflow developer knowledge sharing
+Open run 
+Score
+23.08
+Tests
+32.1%
+Features
+11.8%
+Runtime
+317m 53s
+Tokens
+13.606M
+Cost
+18.8627 CNY
+
+
+Entry Route and Probes 20261113 zmr
+2026/11/13 19:13:10
+
+Model
+—
+Archive
+entry_route.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+3.55
+Test pass rate
+3.8%
+7 / 182
+Model cost
+4.1823 CNY
+Total runtime
+124m 5s
+Tokens
+2.459M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+58.73
+Tests
+63.6%
+Features
+66.7%
+Runtime
+124m 5s
+Tokens
+2.459M
+Cost
+4.1823 CNY
+
+
+Light 20261115 dzs
+2026/11/15 20:01:38
+
+Model
+—
+Archive
+Light 20261115 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+8.29
+Test pass rate
+6.6%
+12 / 182
+Model cost
+0.4836 CNY
+Total runtime
+9m 56s
+Tokens
+568,103
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+125.80
+Tests
+100.0%
+Features
+100.0%
+Runtime
+9m 56s
+Tokens
+568,103
+Cost
+0.4836 CNY
+
+
+Light 20261115 dzs
+2026/11/15 20:01:38
+
+Model
+—
+Archive
+Light 20261115 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+8.29
+Test pass rate
+6.6%
+12 / 182
+Model cost
+0.4836 CNY
+Total runtime
+9m 56s
+Tokens
+568,103
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+125.80
+Tests
+100.0%
+Features
+100.0%
+Runtime
+9m 56s
+Tokens
+568,103
+Cost
+0.4836 CNY
+
+
+Lite Log Preview 20261116 dzs
+2026/11/17 09:09:11
+
+Model
+—
+Archive
+Lite 05b Log Preview 20261116 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+15.67
+Test pass rate
+12.6%
+23 / 182
+Model cost
+1.0682 CNY
+Total runtime
+17m 36s
+Tokens
+1.246M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+121.62
+Tests
+100.0%
+Features
+100.0%
+Runtime
+11m 4s
+Tokens
+1.042M
+Cost
+0.6778 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Open run 
+Score
+127.41
+Tests
+100.0%
+Features
+100.0%
+Runtime
+6m 32s
+Tokens
+204,182
+Cost
+0.3904 CNY

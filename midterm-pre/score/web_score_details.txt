@@ -1,0 +1,490 @@
+Lite Bounded 20261115 dzs
+2026/11/15 23:38:35
+
+Model
+—
+Archive
+Lite Bounded Runtime 20261115 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+89.59
+Test pass rate
+74.8%
+385 / 515
+Model cost
+25.2124 CNY
+Total runtime
+600m 13s
+Tokens
+212.552M
+Task results
+6
+12306 railway travel
+Open run 
+Score
+71.10
+Tests
+59.2%
+Features
+52.7%
+Runtime
+113m 54s
+Tokens
+43.779M
+Cost
+5.3399 CNY
+BookStack knowledge base
+Open run 
+Score
+95.57
+Tests
+77.1%
+Features
+75.0%
+Runtime
+26m 17s
+Tokens
+2.108M
+Cost
+1.2675 CNY
+Ctrip travel services
+Open run 
+Score
+91.29
+Tests
+78.3%
+Features
+69.1%
+Runtime
+240m 35s
+Tokens
+121.058M
+Cost
+10.2451 CNY
+Keep personal note management
+Open run 
+Score
+124.10
+Tests
+100.0%
+Features
+100.0%
+Runtime
+25m 25s
+Tokens
+1.267M
+Cost
+1.5231 CNY
+PrestaShop B2C storefront
+Open run 
+Score
+90.35
+Tests
+73.3%
+Features
+60.0%
+Runtime
+113m 14s
+Tokens
+17.953M
+Cost
+3.0935 CNY
+Stack Overflow developer knowledge sharing
+Open run 
+Score
+105.86
+Tests
+88.1%
+Features
+86.5%
+Runtime
+80m 48s
+Tokens
+26.388M
+Cost
+3.7433 CNY
+
+
+Lite 05b Log Preview 20261116 dzs
+2026/11/17 14:50:02
+
+Model
+—
+Archive
+Lite 05b Log Preview 20261116 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+5.80
+Test pass rate
+4.7%
+24 / 515
+Model cost
+1.0732 CNY
+Total runtime
+17m 2s
+Tokens
+1.330M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+85.37
+Tests
+68.6%
+Features
+70.8%
+Runtime
+17m 2s
+Tokens
+1.330M
+Cost
+1.0732 CNY
+Ctrip travel services
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Keep personal note management
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+PrestaShop B2C storefront
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+Stack Overflow developer knowledge sharing
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+
+
+Lite Workflow Groups 20261118 dzs
+2026/11/18 16:46:01
+
+Model
+—
+Archive
+Lite Workflow Groups 20261118 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+6.09
+Test pass rate
+5.2%
+27 / 515
+Model cost
+2.4168 CNY
+Total runtime
+27m 31s
+Tokens
+3.526M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+89.60
+Tests
+77.1%
+Features
+75.0%
+Runtime
+27m 31s
+Tokens
+3.526M
+Cost
+2.4168 CNY
+
+
+Lite History Search 20261119 dzs
+2026/11/19 14:35:24
+
+Model
+—
+Archive
+Lite History Search 20261119 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+5.83
+Test pass rate
+5.6%
+29 / 515
+Model cost
+8.2405 CNY
+Total runtime
+66m 31s
+Tokens
+3.841M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+85.74
+Tests
+82.9%
+Features
+83.3%
+Runtime
+66m 31s
+Tokens
+3.841M
+Cost
+8.2405 CNY
+
+
+Lite 05c Log Labels 20261119 dzs
+2026/11/19 20:10:27
+
+Model
+—
+Archive
+Lite 05c Log Labels 20261119 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+7.14
+Test pass rate
+5.6%
+29 / 515
+Model cost
+1.0853 CNY
+Total runtime
+33m 32s
+Tokens
+1.637M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+105.01
+Tests
+82.9%
+Features
+83.3%
+Runtime
+33m 32s
+Tokens
+1.637M
+Cost
+1.0853 CNY
+
+
+Lite 07a Input Hints 20261120 dzs
+2026/11/20 12:38:09
+
+Model
+—
+Archive
+Lite 07a Input Hints 20261120 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+8.84
+Test pass rate
+6.8%
+35 / 515
+Model cost
+1.0080 CNY
+Total runtime
+13m 6s
+Tokens
+1.081M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+130.10
+Tests
+100.0%
+Features
+100.0%
+Runtime
+13m 6s
+Tokens
+1.081M
+Cost
+1.0080 CNY
+
+
+Lite 07b Input Hints and Obligations 20261120 dzs
+2026/11/20 12:38:47
+
+Model
+—
+Archive
+Lite 07b Input Hints and Obligations 20261120 dzs.zip
+Runtime
+python
+Billing source
+Own API key
+Score
+7.20
+Test pass rate
+5.6%
+29 / 515
+Model cost
+0.9969 CNY
+Total runtime
+19m 3s
+Tokens
+2.304M
+Task results
+6
+12306 railway travel
+Not run
+Score
+0.00
+Tests
+0.0%
+Features
+—
+Runtime
+--
+Tokens
+--
+Cost
+0.0000 CNY
+BookStack knowledge base
+Open run 
+Score
+105.90
+Tests
+82.9%
+Features
+83.3%
+Runtime
+19m 3s
+Tokens
+2.304M
+Cost
+0.9969 CNY
+
+
