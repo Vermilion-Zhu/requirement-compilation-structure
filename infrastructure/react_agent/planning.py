@@ -172,6 +172,51 @@ def plan_implementation(contracts: dict, manifest: dict | None = None, *, model=
     return plan, meta
 
 
+def batch_contract_context(contracts: dict, plan: dict, batch: dict, *, summary_chars: int = 200) -> dict:
+    """Send full contracts only for the current batch and its ancestors.
+
+    Global website defaults, UI declarations, materials and fingerprints stay available;
+    every other requirement becomes a short, source-linked summary.  This keeps the
+    implementation context small without hiding the batch boundaries from the model.
+    """
+    records = _contracts_by_id(contracts)
+    parents = {}
+    for parent, children in (contracts.get("children") or {}).items():
+        for child in children or []:
+            parents[child] = parent
+    selected = []
+    seen = set()
+    for rid in batch.get("requirements") or []:
+        current = rid
+        while current and current not in seen:
+            if current in records:
+                selected.append(records[current])
+                seen.add(current)
+            current = parents.get(current)
+    batches = {rid: item["id"] for item in plan.get("batches", []) for rid in item.get("requirements", [])}
+    summaries = []
+    for rid, record in records.items():
+        if rid in seen:
+            continue
+        description = " ".join(str(record.get("description") or "").split())
+        summaries.append({"id": rid, "name": record.get("name") or rid,
+            "summary": description[:summary_chars] + ("…" if len(description) > summary_chars else ""),
+            "batch": batches.get(rid), "source": record.get("source")})
+    payload = {key: value for key, value in contracts.items()
+        if key not in {"contracts", "ui_declarations", "website_defaults", "children", "materials"}}
+    payload.update({
+        "contracts": selected,
+        "ui_declarations": contracts.get("ui_declarations", []),
+        "website_defaults": contracts.get("website_defaults", {}),
+        "children": contracts.get("children", {}),
+        "materials": contracts.get("materials", []),
+        "other_requirements": summaries,
+        "context_note": ("Full contracts are included for the current batch and its ancestors. "
+            "Other requirements are summaries only; read input/requirements.yaml when their details are needed."),
+    })
+    return payload
+
+
 def save_plan(output: Path, plan: dict) -> Path:
     path = Path(output) / ".arc" / "implementation-plan.json"
     path.parent.mkdir(parents=True, exist_ok=True)

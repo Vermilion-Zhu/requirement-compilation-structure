@@ -1,12 +1,13 @@
 """Offline contracts for experimental implementation planning and batch verification."""
 
+import copy
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-from infrastructure.react_agent.planning import fallback_plan, plan_implementation, validate_plan
+from infrastructure.react_agent.planning import batch_contract_context, fallback_plan, plan_implementation, validate_plan
 from infrastructure.react_agent.requirements import compile_requirements
 from infrastructure.react_agent.runner import run
 from infrastructure.react_agent.verification import BrowserSuite
@@ -29,7 +30,7 @@ class ScriptedModel:
         self.requests = []
 
     def generate(self, messages, timeout, instructions=None):
-        self.requests.append(json.loads(messages[-1]["content"]))
+        self.requests.append(copy.deepcopy(messages))
         reply = next(self.replies)
         return reply, {"total_tokens": 7}
 
@@ -77,6 +78,21 @@ class PlanningTests(unittest.TestCase):
                 {"id": "B1", "requirements": ["R1"], "depends_on": ["B2"]},
                 {"id": "B2", "requirements": ["R2"], "depends_on": ["B1"]}]}, contracts)
 
+    def test_batch_context_keeps_current_batch_and_summarizes_other_requirements(self):
+        contracts = self.contracts(3)
+        plan = fallback_plan(contracts, scenario_limit=1)
+        context = batch_contract_context(contracts, plan, plan["batches"][1])
+        included = {item["id"] for item in context["contracts"]}
+        self.assertIn("ROOT", included)
+        self.assertIn("R2", included)
+        self.assertNotIn("R1", included)
+        self.assertEqual(context["ui_declarations"], contracts["ui_declarations"])
+        self.assertEqual(context["website_defaults"], contracts["website_defaults"])
+        other = {item["id"]: item for item in context["other_requirements"]}
+        self.assertIn("R1", other)
+        self.assertNotIn("R2", other)
+        self.assertLessEqual(len(other["R1"]["summary"]), 201)
+
     def test_model_plan_is_validated_and_falls_back_on_rejection(self):
         contracts = self.contracts(2)
         model = Mock()
@@ -119,8 +135,16 @@ class BatchRunnerTests(unittest.TestCase):
         self.assertEqual(len(checks), 4)
         self.assertEqual([batch["status"] for batch in report["plan"]["batches"]],
             ["PASSED", "PASSED", "PASSED"])
-        payloads = [request for request in model.requests]
+        payloads = [json.loads(request[-1]["content"]) for request in model.requests]
         self.assertTrue(any("batch_transition" in payload for payload in payloads))
+        initial = json.loads(model.requests[0][0]["content"])["requirement_contracts"]
+        self.assertEqual({item["id"] for item in initial["contracts"]}, {"ROOT", "R1"})
+        self.assertEqual({item["id"] for item in initial["other_requirements"]}, {"R2", "R3"})
+        second = json.loads(model.requests[1][0]["content"])["requirement_contracts"]
+        self.assertEqual({item["id"] for item in second["contracts"]}, {"ROOT", "R2"})
+        transition = next(payload["batch_transition"] for payload in payloads if "batch_transition" in payload)
+        self.assertTrue(transition["requirement_context_updated"])
+        self.assertNotIn("requirement_context", transition)
 
     def test_batch_failure_does_not_advance(self):
         model = ScriptedModel([{"actions": [{"tool": "verify"}]}])

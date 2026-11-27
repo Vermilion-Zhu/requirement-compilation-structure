@@ -5,8 +5,13 @@ wording and persistence requirements. Use defaults only for unspecified properti
 Reference images supply visual evidence. Application records come from actual data.
 The compiled contracts retain original clauses, hierarchy and source pointers. Use
 ancestor contracts and data/environment declarations as context for their children.
-Track implementation_ids in progress and compare their Given/When/Then outcomes when
-verifying. Report unresolved requirements in your finish summary.
+When implementation_plan and current_batch are present, requirement_contracts contains
+full clauses only for the current batch and its ancestors; other_requirements are
+source-linked summaries, while website_defaults and ui_declarations remain complete.
+Read input/requirements.yaml when a summary is insufficient; do not assume omitted
+requirements are absent. Track implementation_ids in progress and compare their
+Given/When/Then outcomes when verifying. Report unresolved requirements in your finish
+summary.
 Apply website_defaults where the original contract is unspecified. Test feedback
 roles and accessible names separately from their visible text and child actions.
 Honor ui_declarations.container ownership. An action declared inside feedback belongs

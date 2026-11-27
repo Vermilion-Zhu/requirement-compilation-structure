@@ -70,6 +70,7 @@
 | 开关 | --plan-batches、REACT_PLAN_BATCHES=1，或 scripts/package.py --engine react --plan-batches 写入发布清单；默认关闭，行为与原来一致 |
 | 证据 | OUTPUT/.arc/implementation-plan.json（规划）与 OUTPUT/.arc/react-report.json 的 plan（批次状态/当前批次） |
 | 边界 | 规划模型不读取测试源码；测试仍冻结、不可修改；规划失败或输出不合法时回退到确定性分组 |
+| 上下文 | 实现批次只带当前批次及祖先的完整契约；`website_defaults`/`ui_declarations` 全局保留，其余需求只给摘要；切换批次时滚动替换，不累积旧契约 |
 
 ### 2.11 第十一轮：提交前语义探针（M10）
 

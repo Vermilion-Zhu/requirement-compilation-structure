@@ -321,6 +321,8 @@ uv run main.py input --output-dir outputs/demo --engine react
 
 当前不做激进压缩：每批结束只追加批次完成/下一批的 transition，保留完整对话与工具观察；
 暂不在每批结束强制回归前序批次（修改前序接口的写集仍允许），最终全量套件作为兜底门禁；
+实现上下文只发送当前批次及其祖先的完整契约，`website_defaults`/`ui_declarations` 保持全局，
+其余需求以 source-linked 摘要提供；切换批次时滚动替换该上下文，旧批次契约不会累积。
 后续根据实际运行成本再决定是否增加摘要或前序回归。规划结果写入
 `OUTPUT/.arc/implementation-plan.json`，批次状态写入
 `OUTPUT/.arc/react-report.json` 的 `plan` 字段。发布包可用

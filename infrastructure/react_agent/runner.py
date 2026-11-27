@@ -15,6 +15,7 @@ from urllib.request import ProxyHandler, build_opener
 from uuid import uuid4
 from hashlib import sha256
 
+from infrastructure.react_agent.planning import batch_contract_context
 from infrastructure.react_agent.prompt import INSTRUCTIONS
 from infrastructure.react_agent.provenance import fingerprint as framework_fingerprint
 from infrastructure.react_agent.requirements import compile_requirements
@@ -198,7 +199,9 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
         raise ValueError("An implementation plan needs at least one batch")
     batch_index = 0
     batch_state = None
+    contract_payload = contracts
     if plan:
+        contract_payload = batch_contract_context(contracts, plan, batches[0])
         batch_state = {"source": plan.get("source", "unknown"), "current_index": 0,
             "batches": [{key: batch.get(key) for key in ("id", "requirements", "tests", "goal", "depends_on")}
                 | {"status": "IN_PROGRESS" if index == 0 else "PENDING"}
@@ -206,7 +209,7 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
         report["plan"] = batch_state
         save_json(arc / "implementation-plan.json", plan)
     messages = [{"role": "user", "content": json.dumps({
-        "requirement_contracts": contracts, "application_root": str(output),
+        "requirement_contracts": contract_payload, "application_root": str(output),
         "input_root": "input/", "platform": sys.platform,
         "budget": {"max_steps": max_steps, "initial_steps": initial_steps, "seconds": time_budget},
         "frozen_acceptance": {"available": acceptance is not None, "run_via": "verify"},
@@ -227,11 +230,13 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
     }, ensure_ascii=False)}]
     if session is not None:
         current_context = json.loads(messages[0]["content"])
-        messages = [*session["messages"], {"role": "user", "content": json.dumps({
-            "resume_context": current_context,
+        resume_context = {"resume_context": current_context,
             "instruction": "Continue from the saved observations. Inspect any partially applied action. "
-                "Use verify for the supplied independent acceptance and repair actual application failures.",
-        }, ensure_ascii=False)}]
+                "Use verify for the supplied independent acceptance and repair actual application failures."}
+        if plan:
+            resume_context["current_batch"] = batches[batch_index]
+            resume_context["requirement_context_updated"] = True
+        messages = [*session["messages"], {"role": "user", "content": json.dumps(resume_context, ensure_ascii=False)}]
         previous = session["report"]
         if plan and isinstance(previous.get("plan"), dict):
             saved = previous["plan"]
@@ -247,6 +252,16 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
     trajectory = arc / "react-trajectory.jsonl"
     if not resume:
         trajectory.write_text("", encoding="utf-8")
+
+    def set_batch_context(batch):
+        """Replace the rolling batch context; old batch clauses do not accumulate."""
+        content = json.loads(messages[0]["content"])
+        content["requirement_contracts"] = batch_contract_context(contracts, plan, batch)
+        content["current_batch"] = batch
+        messages[0]["content"] = json.dumps(content, ensure_ascii=False)
+
+    if session is not None and plan:
+        set_batch_context(batches[batch_index])
 
     def save_session():
         save_json(session_path, {"source_sha256": contracts["source_sha256"],
@@ -349,9 +364,11 @@ def run(requirements: Path, output: Path, *, model=None, max_steps=None, time_bu
                                 batch_index += 1
                                 batch_state["current_index"] = batch_index
                                 batch_state["batches"][batch_index]["status"] = "IN_PROGRESS"
+                                set_batch_context(batches[batch_index])
                                 batch_transition = {"batch_completed": batch["id"],
                                     "next_batch": batches[batch_index],
-                                    "instruction": "The batch passed. Implement the next batch; verify will run only its cases."}
+                                    "requirement_context_updated": True,
+                                    "instruction": "The batch passed. requirement_contracts in the initial context now describes the next batch; implement it; verify will run only its cases."}
                             else:
                                 full = checker(output, remaining) if checker else startup_check(output, remaining,
                                     acceptance=acceptance)
